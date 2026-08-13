@@ -387,12 +387,22 @@ async def reply_to_ticket(
             selectinload(Ticket.messages),
             selectinload(Ticket.events),
             joinedload(Ticket.assigned_to),
+            joinedload(Ticket.department),
         )
         .filter(Ticket.id == ticket_id)
         .first()
     )
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Reply from the ticket's own department mailbox, so e.g. an HR ticket's
+    # replies come from hr@dayair.org, not the IT address. Falls back to the
+    # historical default for a ticket with no department, or a department
+    # that hasn't had a mailbox configured yet.
+    reply_mailbox = (
+        (ticket.department and ticket.department.mailbox_email) or settings.helpdesk_email
+    )
+    reply_dept_name = (ticket.department and ticket.department.name) or "IT Helpdesk"
 
     # Find last inbound message — prefer Graph ID for threading
     inbound_messages = [m for m in ticket.messages if m.direction == "inbound"]
@@ -407,8 +417,8 @@ async def reply_to_ticket(
     # Build HTML body with signature
     signature = (
         "<br><br>--<br>"
-        "<strong>IT Helpdesk</strong>, Day Air Credit Union"
-        " | <a href='mailto:helpdesk@dayair.org'>helpdesk@dayair.org</a>"
+        f"<strong>{reply_dept_name}</strong>, Day Air Credit Union"
+        f" | <a href='mailto:{reply_mailbox}'>{reply_mailbox}</a>"
     )
     body_html = f'<div style="font-family:sans-serif">{body.body}</div>{signature}'
 
@@ -420,7 +430,7 @@ async def reply_to_ticket(
         # Explicitly set the subject so the [HD-XXXXXX] tag is included, which
         # lets us match the ticket if the user replies back.
         await graph_client.reply_to_message(
-            mailbox=settings.helpdesk_email,
+            mailbox=reply_mailbox,
             graph_message_id=last_inbound.graph_id,
             body_html=body_html,
             subject=reply_subject,
@@ -428,7 +438,7 @@ async def reply_to_ticket(
     else:
         # No original message to reply to — send as new message
         await graph_client.send_message(
-            mailbox=settings.helpdesk_email,
+            mailbox=reply_mailbox,
             to_email=ticket.requester_email,
             to_name=ticket.requester_name or ticket.requester_email,
             subject=reply_subject,
@@ -439,8 +449,8 @@ async def reply_to_ticket(
     outbound = TicketMessage(
         ticket_id=ticket.id,
         direction="outbound",
-        from_email=settings.helpdesk_email,
-        from_name="IT Helpdesk",
+        from_email=reply_mailbox,
+        from_name=reply_dept_name,
         to_email=ticket.requester_email,
         subject=reply_subject,
         body_text=body.body,

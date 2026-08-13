@@ -105,16 +105,24 @@ def _strip_quoted_reply(html: str) -> str:
     return str(soup)
 
 
-def _poll_since() -> str:
-    """Return the ISO-8601 UTC timestamp to use as the lower bound for polling.
+def _poll_since(department_id: int) -> str:
+    """Return the ISO-8601 UTC timestamp to use as the lower bound for polling
+    a given department's mailbox.
 
-    Uses the most recent email_received_at across all tickets, minus a 5-minute
-    buffer to tolerate clock skew. Falls back to today at midnight UTC so we never
-    re-ingest years of history on a fresh install.
+    Uses the most recent email_received_at among THAT department's tickets,
+    minus a 5-minute buffer to tolerate clock skew. Falls back to today at
+    midnight UTC so we never re-ingest years of history on a fresh install.
+    Scoped per-department so a quiet mailbox's window can't get silently
+    dragged forward just because a different, busier mailbox advanced a
+    shared watermark.
     """
     db = SessionLocal()
     try:
-        latest: Optional[datetime] = db.query(func.max(Ticket.email_received_at)).scalar()
+        latest: Optional[datetime] = (
+            db.query(func.max(Ticket.email_received_at))
+            .filter(Ticket.department_id == department_id)
+            .scalar()
+        )
     finally:
         db.close()
 
@@ -126,243 +134,270 @@ def _poll_since() -> str:
     return since.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+async def _poll_mailbox(department: "Department") -> None:
+    """Poll one department's mailbox and create/update tickets from unread mail."""
+    mailbox = department.mailbox_email
+    since = _poll_since(department.id)
+    try:
+        messages = await graph_client.poll_unread_messages(mailbox, since)
+    except Exception as exc:
+        logger.error("Failed to poll mailbox %s (%s): %s", mailbox, department.name, exc)
+        return
+
+    if not messages:
+        return
+
+    logger.info("Processing %d unread message(s) for %s (%s)", len(messages), department.name, mailbox)
+
+    db = SessionLocal()
+    try:
+        # Build a set of already-processed Graph message IDs from the persistent
+        # seen-IDs table. This survives ticket deletion, preventing deleted tickets
+        # from being recreated on the next poll.
+        processed_ids: set[str] = {
+            row[0] for row in db.query(SeenGraphId.graph_id).all()
+        }
+
+        for msg in messages:
+            graph_msg_id: str = msg.get("id", "")
+
+            if graph_msg_id in processed_ids:
+                logger.debug("Skipping already-processed message %s", graph_msg_id)
+                try:
+                    await graph_client.mark_read(mailbox, graph_msg_id)
+                except Exception:
+                    pass
+                continue
+
+            # Parse sender
+            from_obj = msg.get("from", {}).get("emailAddress", {})
+            from_email: str = from_obj.get("address", "").strip().lower()
+            from_name: str = from_obj.get("name", "").strip()
+
+            # Skip messages sent BY this mailbox to avoid loops
+            if from_email == mailbox.lower():
+                logger.debug("Skipping message from self: %s", graph_msg_id)
+                await graph_client.mark_read(mailbox, graph_msg_id)
+                continue
+
+            # Parse recipients
+            to_recipients = msg.get("toRecipients", [])
+            to_email: str = (
+                to_recipients[0].get("emailAddress", {}).get("address", "")
+                if to_recipients
+                else mailbox
+            )
+
+            # Parse internet headers
+            inet_headers: list[dict] = msg.get("internetMessageHeaders", [])
+            message_id: Optional[str] = (
+                msg.get("internetMessageId")
+                or _extract_header(inet_headers, "Message-ID")
+            )
+            in_reply_to: Optional[str] = _extract_header(inet_headers, "In-Reply-To")
+            references_header: Optional[str] = _extract_header(inet_headers, "References")
+            reference_ids: list[str] = references_header.split() if references_header else []
+
+            # Parse received timestamp
+            received_dt_str: Optional[str] = msg.get("receivedDateTime")
+            email_received_at: Optional[datetime] = None
+            if received_dt_str:
+                try:
+                    email_received_at = datetime.fromisoformat(
+                        received_dt_str.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    pass
+
+            # Parse subject
+            raw_subject: str = (msg.get("subject") or "").strip()
+            clean_subject: str = _normalize_subject(raw_subject) if raw_subject else ""
+
+            # Parse body
+            body_obj = msg.get("body", {})
+            content_type: str = body_obj.get("contentType", "text").lower()
+            raw_body: str = body_obj.get("content", "")
+
+            if content_type == "html":
+                body_html: Optional[str] = _strip_quoted_reply(raw_body)
+                body_text: Optional[str] = _strip_html(body_html)
+            else:
+                body_text = raw_body
+                body_html = None
+
+            # Embed inline attachments as base64 data URIs.
+            # Check for cid: references directly rather than relying on hasAttachments,
+            # because Graph doesn't always set hasAttachments=true for inline-only images.
+            if body_html and "cid:" in body_html:
+                try:
+                    attachments = await graph_client.get_inline_attachments(
+                        mailbox, graph_msg_id
+                    )
+                    for att in attachments:
+                        cid = (att.get("contentId") or "").strip("<>")
+                        b64 = att.get("contentBytes", "")
+                        mime = att.get("contentType", "image/png")
+                        if cid and b64:
+                            body_html = body_html.replace(
+                                f"cid:{cid}", f"data:{mime};base64,{b64}",
+                            )
+                            body_html = body_html.replace(
+                                f"cid:<{cid}>", f"data:{mime};base64,{b64}",
+                            )
+                except Exception as exc:
+                    logger.warning("Failed to fetch inline attachments: %s", exc)
+
+            # ------------------------------------------------------------------
+            # Try to find an existing ticket
+            # ------------------------------------------------------------------
+            ticket: Optional[Ticket] = None
+
+            # 1. Match by In-Reply-To or References → existing message_id (most
+            # reliable). References carries the whole thread chain, so it can
+            # still find the ticket when a client drops In-Reply-To on forward.
+            thread_ids = [mid for mid in [in_reply_to, *reference_ids] if mid]
+            if thread_ids:
+                existing_msg = (
+                    db.query(TicketMessage)
+                    .filter(TicketMessage.message_id.in_(thread_ids))
+                    .first()
+                )
+                if existing_msg:
+                    ticket = db.query(Ticket).filter(Ticket.id == existing_msg.ticket_id).first()
+
+            # 2. Match by ticket number tag in subject e.g. [HD-000001]
+            if ticket is None:
+                tag_match = re.search(r"\[HD-(\d+)\]", raw_subject, re.IGNORECASE)
+                if tag_match:
+                    ticket_number = f"HD-{int(tag_match.group(1)):06d}"
+                    ticket = db.query(Ticket).filter(Ticket.number == ticket_number).first()
+
+            # 3. Normalized subject match — same requester, same department,
+            # recent open tickets. Department-scoped so the same person emailing
+            # two different department mailboxes with a similar subject within
+            # the window doesn't get merged into one ticket.
+            if ticket is None and clean_subject:
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
+                recent_tickets = (
+                    db.query(Ticket)
+                    .filter(
+                        Ticket.status.in_(["open", "in_progress", "pending"]),
+                        Ticket.requester_email == from_email,
+                        Ticket.department_id == department.id,
+                        Ticket.created_at >= cutoff,
+                    )
+                    .all()
+                )
+                for candidate in recent_tickets:
+                    if _normalize_subject(candidate.subject) == clean_subject:
+                        ticket = candidate
+                        break
+
+            # 4. Create new ticket
+            if ticket is None:
+                subject_for_ticket = (
+                    _strip_reply_prefixes(raw_subject).strip()
+                    or raw_subject
+                    or "(No Subject)"
+                )
+                ticket = Ticket(
+                    number=_next_ticket_number(db),
+                    subject=subject_for_ticket,
+                    status="open",
+                    priority="normal",
+                    requester_email=from_email,
+                    requester_name=from_name or None,
+                    first_message_id=message_id,
+                    email_received_at=email_received_at,
+                    department_id=department.id,
+                )
+                db.add(ticket)
+                db.flush()  # get ticket.id
+
+                _add_event(
+                    db,
+                    ticket_id=ticket.id,
+                    event_type="created",
+                    new_value=ticket.number,
+                )
+                logger.info(
+                    "Created new ticket %s for %s in %s — subject: %s",
+                    ticket.number,
+                    from_email,
+                    department.name,
+                    ticket.subject,
+                )
+
+            # ------------------------------------------------------------------
+            # Add inbound message to the ticket
+            # ------------------------------------------------------------------
+            ticket.has_unread = True
+            inbound = TicketMessage(
+                ticket_id=ticket.id,
+                direction="inbound",
+                from_email=from_email,
+                from_name=from_name or None,
+                to_email=to_email,
+                subject=raw_subject or None,
+                body_text=body_text,
+                body_html=body_html,
+                message_id=message_id,
+                in_reply_to=in_reply_to,
+                graph_id=graph_msg_id,
+            )
+            db.add(inbound)
+
+            # Persist the graph_id so this message is never re-processed,
+            # even if the ticket is later deleted.
+            db.merge(SeenGraphId(graph_id=graph_msg_id))
+
+            # Mark email as read
+            try:
+                await graph_client.mark_read(mailbox, graph_msg_id)
+            except Exception as exc:
+                logger.warning("Failed to mark message %s as read: %s", graph_msg_id, exc)
+
+            db.commit()
+
+    except Exception as exc:
+        logger.error("Unexpected error polling %s (%s): %s", mailbox, department.name, exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
 async def process_new_emails() -> None:
-    """Fetch emails newer than the last processed message and create/update tickets."""
+    """Poll every department's mailbox (if it has one) and create/update tickets."""
     if graph_client is None:
         return
     if _poll_lock.locked():
         logger.debug("Poll already in progress, skipping.")
         return
     async with _poll_lock:
-        since = _poll_since()
-        try:
-            messages = await graph_client.poll_unread_messages(settings.helpdesk_email, since)
-        except Exception as exc:
-            logger.error("Failed to poll mailbox: %s", exc)
-            return
-
-        if not messages:
-            return
-
-        logger.info("Processing %d unread message(s)", len(messages))
-
         db = SessionLocal()
         try:
-            # Build a set of already-processed Graph message IDs from the persistent
-            # seen-IDs table. This survives ticket deletion, preventing deleted tickets
-            # from being recreated on the next poll.
-            processed_ids: set[str] = {
-                row[0] for row in db.query(SeenGraphId.graph_id).all()
-            }
-
-            for msg in messages:
-                graph_msg_id: str = msg.get("id", "")
-
-                if graph_msg_id in processed_ids:
-                    logger.debug("Skipping already-processed message %s", graph_msg_id)
-                    try:
-                        await graph_client.mark_read(settings.helpdesk_email, graph_msg_id)
-                    except Exception:
-                        pass
-                    continue
-
-                # Parse sender
-                from_obj = msg.get("from", {}).get("emailAddress", {})
-                from_email: str = from_obj.get("address", "").strip().lower()
-                from_name: str = from_obj.get("name", "").strip()
-
-                # Skip messages sent BY the helpdesk to avoid loops
-                if from_email == settings.helpdesk_email.lower():
-                    logger.debug("Skipping message from self: %s", graph_msg_id)
-                    await graph_client.mark_read(settings.helpdesk_email, graph_msg_id)
-                    continue
-
-                # Parse recipients
-                to_recipients = msg.get("toRecipients", [])
-                to_email: str = (
-                    to_recipients[0].get("emailAddress", {}).get("address", "")
-                    if to_recipients
-                    else settings.helpdesk_email
-                )
-
-                # Parse internet headers
-                inet_headers: list[dict] = msg.get("internetMessageHeaders", [])
-                message_id: Optional[str] = (
-                    msg.get("internetMessageId")
-                    or _extract_header(inet_headers, "Message-ID")
-                )
-                in_reply_to: Optional[str] = _extract_header(inet_headers, "In-Reply-To")
-                references_header: Optional[str] = _extract_header(inet_headers, "References")
-                reference_ids: list[str] = references_header.split() if references_header else []
-
-                # Parse received timestamp
-                received_dt_str: Optional[str] = msg.get("receivedDateTime")
-                email_received_at: Optional[datetime] = None
-                if received_dt_str:
-                    try:
-                        email_received_at = datetime.fromisoformat(
-                            received_dt_str.replace("Z", "+00:00")
-                        )
-                    except ValueError:
-                        pass
-
-                # Parse subject
-                raw_subject: str = (msg.get("subject") or "").strip()
-                clean_subject: str = _normalize_subject(raw_subject) if raw_subject else ""
-
-                # Parse body
-                body_obj = msg.get("body", {})
-                content_type: str = body_obj.get("contentType", "text").lower()
-                raw_body: str = body_obj.get("content", "")
-
-                if content_type == "html":
-                    body_html: Optional[str] = _strip_quoted_reply(raw_body)
-                    body_text: Optional[str] = _strip_html(body_html)
-                else:
-                    body_text = raw_body
-                    body_html = None
-
-                # Embed inline attachments as base64 data URIs.
-                # Check for cid: references directly rather than relying on hasAttachments,
-                # because Graph doesn't always set hasAttachments=true for inline-only images.
-                if body_html and "cid:" in body_html:
-                    try:
-                        attachments = await graph_client.get_inline_attachments(
-                            settings.helpdesk_email, graph_msg_id
-                        )
-                        for att in attachments:
-                            cid = (att.get("contentId") or "").strip("<>")
-                            b64 = att.get("contentBytes", "")
-                            mime = att.get("contentType", "image/png")
-                            if cid and b64:
-                                body_html = body_html.replace(
-                                    f"cid:{cid}", f"data:{mime};base64,{b64}",
-                                )
-                                body_html = body_html.replace(
-                                    f"cid:<{cid}>", f"data:{mime};base64,{b64}",
-                                )
-                    except Exception as exc:
-                        logger.warning("Failed to fetch inline attachments: %s", exc)
-
-                # ------------------------------------------------------------------
-                # Try to find an existing ticket
-                # ------------------------------------------------------------------
-                ticket: Optional[Ticket] = None
-
-                # 1. Match by In-Reply-To or References → existing message_id (most
-                # reliable). References carries the whole thread chain, so it can
-                # still find the ticket when a client drops In-Reply-To on forward.
-                thread_ids = [mid for mid in [in_reply_to, *reference_ids] if mid]
-                if thread_ids:
-                    existing_msg = (
-                        db.query(TicketMessage)
-                        .filter(TicketMessage.message_id.in_(thread_ids))
-                        .first()
-                    )
-                    if existing_msg:
-                        ticket = db.query(Ticket).filter(Ticket.id == existing_msg.ticket_id).first()
-
-                # 2. Match by ticket number tag in subject e.g. [HD-000001]
-                if ticket is None:
-                    tag_match = re.search(r"\[HD-(\d+)\]", raw_subject, re.IGNORECASE)
-                    if tag_match:
-                        ticket_number = f"HD-{int(tag_match.group(1)):06d}"
-                        ticket = db.query(Ticket).filter(Ticket.number == ticket_number).first()
-
-                # 3. Normalized subject match — same requester only, recent open tickets
-                if ticket is None and clean_subject:
-                    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
-                    recent_tickets = (
-                        db.query(Ticket)
-                        .filter(
-                            Ticket.status.in_(["open", "in_progress", "pending"]),
-                            Ticket.requester_email == from_email,
-                            Ticket.created_at >= cutoff,
-                        )
-                        .all()
-                    )
-                    for candidate in recent_tickets:
-                        if _normalize_subject(candidate.subject) == clean_subject:
-                            ticket = candidate
-                            break
-
-                # 4. Create new ticket
-                if ticket is None:
-                    subject_for_ticket = (
-                        _strip_reply_prefixes(raw_subject).strip()
-                        or raw_subject
-                        or "(No Subject)"
-                    )
-                    ticket = Ticket(
-                        number=_next_ticket_number(db),
-                        subject=subject_for_ticket,
-                        status="open",
-                        priority="normal",
-                        requester_email=from_email,
-                        requester_name=from_name or None,
-                        first_message_id=message_id,
-                        email_received_at=email_received_at,
-                    )
-                    db.add(ticket)
-                    db.flush()  # get ticket.id
-
-                    _add_event(
-                        db,
-                        ticket_id=ticket.id,
-                        event_type="created",
-                        new_value=ticket.number,
-                    )
-                    logger.info(
-                        "Created new ticket %s for %s — subject: %s",
-                        ticket.number,
-                        from_email,
-                        ticket.subject,
-                    )
-
-                # ------------------------------------------------------------------
-                # Add inbound message to the ticket
-                # ------------------------------------------------------------------
-                ticket.has_unread = True
-                inbound = TicketMessage(
-                    ticket_id=ticket.id,
-                    direction="inbound",
-                    from_email=from_email,
-                    from_name=from_name or None,
-                    to_email=to_email,
-                    subject=raw_subject or None,
-                    body_text=body_text,
-                    body_html=body_html,
-                    message_id=message_id,
-                    in_reply_to=in_reply_to,
-                    graph_id=graph_msg_id,
-                )
-                db.add(inbound)
-
-                # Persist the graph_id so this message is never re-processed,
-                # even if the ticket is later deleted.
-                db.merge(SeenGraphId(graph_id=graph_msg_id))
-
-                # Mark email as read
-                try:
-                    await graph_client.mark_read(settings.helpdesk_email, graph_msg_id)
-                except Exception as exc:
-                    logger.warning("Failed to mark message %s as read: %s", graph_msg_id, exc)
-
-                db.commit()
-
-        except Exception as exc:
-            logger.error("Unexpected error in process_new_emails: %s", exc, exc_info=True)
-            db.rollback()
+            departments = db.query(Department).filter(Department.mailbox_email.isnot(None)).all()
         finally:
             db.close()
 
+        for department in departments:
+            try:
+                await _poll_mailbox(department)
+            except Exception as exc:
+                # One department's mailbox failing (bad access-policy setup, deleted
+                # mailbox, revoked permission) shouldn't stop the others from being polled.
+                logger.error(
+                    "Poll failed for department %r (%s): %s",
+                    department.name, department.mailbox_email, exc, exc_info=True,
+                )
+                continue
+
 
 async def poll_loop() -> None:
-    """Background task that polls for new emails on a fixed interval."""
+    """Background task that polls every configured mailbox on a fixed interval."""
     logger.info(
-        "Email poll loop started (interval=%ds, mailbox=%s)",
+        "Email poll loop started (interval=%ds)",
         settings.helpdesk_poll_interval,
-        settings.helpdesk_email,
     )
     while True:
         await asyncio.sleep(settings.helpdesk_poll_interval)
@@ -409,15 +444,22 @@ def _apply_inplace_migrations() -> None:
 
 
 def _seed_default_department() -> None:
-    """Ensure a default department exists and every ticket/active user is in it.
+    """Ensure the default IT department exists and every ticket/active user is in it.
 
     Idempotent — safe to run on every startup. Without the membership backfill,
     the moment department-based ticket filtering ships, every existing staff
     user would have zero memberships and see nothing.
+
+    Must look up by the known slug, not `.first()` with no ordering — once a
+    second department exists, `.first()` is whatever order Postgres feels like
+    returning that day, not necessarily insertion order. (Confirmed the hard
+    way: this silently reassigned tickets/memberships/mailbox_email onto an
+    unrelated real department on a later restart, once more departments
+    existed — see the deploy notes for how that got cleaned up.)
     """
     db = SessionLocal()
     try:
-        dept = db.query(Department).first()
+        dept = db.query(Department).filter_by(slug="it").first()
         if dept is None:
             dept = Department(name="IT Helpdesk", slug="it", visible_columns=None)
             db.add(dept)
