@@ -54,18 +54,18 @@ function PriorityBadge({ priority }) {
 // ---- Inline selects -------------------------------------------------------
 
 const STATUS_STYLES = {
-  open:        { color: '#38bdf8', bg: 'rgba(56,189,248,0.15)',  border: 'rgba(56,189,248,0.3)' },
-  in_progress: { color: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.3)' },
-  pending:     { color: '#c084fc', bg: 'rgba(192,132,252,0.15)',border: 'rgba(192,132,252,0.3)' },
-  resolved:    { color: '#4ade80', bg: 'rgba(74,222,128,0.15)', border: 'rgba(74,222,128,0.3)' },
-  closed:      { color: '#94a3b8', bg: 'rgba(71,85,105,0.25)',  border: 'rgba(71,85,105,0.4)'  },
+  open:        { color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 15%, var(--surface))', border: 'color-mix(in srgb, var(--accent) 30%, var(--surface))' },
+  in_progress: { color: 'var(--yellow)', bg: 'color-mix(in srgb, var(--yellow) 15%, var(--surface))', border: 'color-mix(in srgb, var(--yellow) 30%, var(--surface))' },
+  pending:     { color: 'var(--purple)', bg: 'color-mix(in srgb, var(--purple) 15%, var(--surface))', border: 'color-mix(in srgb, var(--purple) 30%, var(--surface))' },
+  resolved:    { color: 'var(--green)', bg: 'color-mix(in srgb, var(--green) 15%, var(--surface))', border: 'color-mix(in srgb, var(--green) 30%, var(--surface))' },
+  closed:      { color: 'var(--muted)', bg: 'color-mix(in srgb, var(--gray) 25%, var(--surface))', border: 'color-mix(in srgb, var(--gray) 40%, var(--surface))' },
 };
 
 const PRIORITY_STYLES = {
-  low:    { color: '#94a3b8', bg: 'rgba(71,85,105,0.2)',   border: 'rgba(71,85,105,0.35)'  },
-  normal: { color: '#7dd3fc', bg: 'rgba(56,189,248,0.12)', border: 'rgba(56,189,248,0.25)' },
-  high:   { color: '#fb923c', bg: 'rgba(251,146,60,0.15)', border: 'rgba(251,146,60,0.3)'  },
-  urgent: { color: '#f87171', bg: 'rgba(248,113,113,0.15)',border: 'rgba(248,113,113,0.3)' },
+  low:    { color: 'var(--muted)', bg: 'color-mix(in srgb, var(--gray) 20%, var(--surface))', border: 'color-mix(in srgb, var(--gray) 35%, var(--surface))' },
+  normal: { color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 12%, var(--surface))', border: 'color-mix(in srgb, var(--accent) 25%, var(--surface))' },
+  high:   { color: 'var(--orange)', bg: 'color-mix(in srgb, var(--orange) 15%, var(--surface))', border: 'color-mix(in srgb, var(--orange) 30%, var(--surface))' },
+  urgent: { color: 'var(--red)', bg: 'color-mix(in srgb, var(--red) 15%, var(--surface))', border: 'color-mix(in srgb, var(--red) 30%, var(--surface))' },
 };
 
 const selectBase = {
@@ -120,7 +120,7 @@ function InlineAssignSelect({ value, users, onChange }) {
       value={value ?? ''}
       onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
       onClick={e => e.stopPropagation()}
-      style={{ ...selectBase, textTransform: 'none', fontSize: 12, color: value ? '#cbd5e1' : '#38bdf8', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 6px' }}
+      style={{ ...selectBase, textTransform: 'none', fontSize: 12, color: value ? 'var(--body)' : 'var(--accent)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 6px' }}
     >
       <option value=''>Unassigned</option>
       {users.map(u => (
@@ -134,10 +134,10 @@ function InlineAssignSelect({ value, users, onChange }) {
 
 function StatsBar({ stats, onStatClick, activeStatus }) {
   const items = [
-    { key: 'open', label: 'Open', color: '#38bdf8' },
-    { key: 'in_progress', label: 'In Progress', color: '#fbbf24' },
-    { key: 'pending', label: 'Pending', color: '#c084fc' },
-    { key: 'resolved', label: 'Resolved', color: '#4ade80' },
+    { key: 'open', label: 'Open', color: 'var(--accent)' },
+    { key: 'in_progress', label: 'In Progress', color: 'var(--yellow)' },
+    { key: 'pending', label: 'Pending', color: 'var(--purple)' },
+    { key: 'resolved', label: 'Resolved', color: 'var(--green)' },
   ];
 
   return (
@@ -149,8 +149,8 @@ function StatsBar({ stats, onStatClick, activeStatus }) {
           onClick={() => onStatClick(key)}
           style={{
             cursor: 'pointer',
-            border: activeStatus === key ? `1px solid ${color}` : '1px solid #334155',
-            background: activeStatus === key ? `rgba(0,0,0,0.2)` : '#1e293b',
+            border: activeStatus === key ? `1px solid ${color}` : '1px solid var(--border)',
+            background: activeStatus === key ? `rgba(0,0,0,0.2)` : 'var(--surface)',
           }}
           title={`Filter by ${label}`}
         >
@@ -464,7 +464,7 @@ export default function Queue() {
                 className="btn"
                 onClick={handleDeleteSelected}
                 disabled={deleting}
-                style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                style={{ background: 'var(--red)', color: '#fff', border: 'none' }}
               >
                 {deleting ? 'Deleting…' : `Delete ${selected.size} selected`}
               </button>
@@ -481,7 +481,7 @@ export default function Queue() {
             >
               {refreshing ? (
                 <>
-                  <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #334155', borderTopColor: '#38bdf8', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                  <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, display: 'inline-block' }} />
                   Refreshing…
                 </>
               ) : (
@@ -502,12 +502,12 @@ export default function Queue() {
             </div>
           ) : tickets.length === 0 ? (
             <div className="empty-state">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="1.5" aria-hidden="true">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--border)" strokeWidth="1.5" aria-hidden="true">
                 <rect x="3" y="5" width="18" height="14" rx="2" />
                 <path d="M3 9h18M9 5v4M15 5v4" />
               </svg>
               <p>No tickets found</p>
-              <p style={{ fontSize: 13, marginTop: 4, color: '#475569' }}>Try adjusting your filters or search.</p>
+              <p style={{ fontSize: 13, marginTop: 4, color: 'var(--gray)' }}>Try adjusting your filters or search.</p>
             </div>
           ) : (
             <div className="table-wrap">
@@ -568,20 +568,20 @@ export default function Queue() {
                           aria-label={`Select ticket ${t.number}`}
                         />
                       </td>
-                      <td style={{ color: '#64748b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                      <td style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         #{t.number ?? t.id}
                       </td>
                       <td style={{ maxWidth: 280 }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
                           {t.has_unread && (
-                            <span title="New reply from user" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', display: 'inline-block' }} />
+                            <span title="New reply from user" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
                           )}
-                          <span style={{ color: t.has_unread ? '#f1f5f9' : '#94a3b8', fontWeight: t.has_unread ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: t.has_unread ? 'var(--text)' : 'var(--muted)', fontWeight: t.has_unread ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {t.subject || '(No subject)'}
                           </span>
                         </span>
                       </td>
-                      <td style={{ color: '#cbd5e1', whiteSpace: 'nowrap' }}>
+                      <td style={{ color: 'var(--body)', whiteSpace: 'nowrap' }}>
                         {t.requester_name || t.requester_email || '—'}
                       </td>
                       <td onClick={e => e.stopPropagation()}>
@@ -606,7 +606,7 @@ export default function Queue() {
                       <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const asset = assetMap[t.requester_email];
-                          if (!asset) return <span style={{ color: '#475569' }}>—</span>;
+                          if (!asset) return <span style={{ color: 'var(--gray)' }}>—</span>;
                           return (
                             <a
                               href={`https://inventory.dayair.org/assets?q=${encodeURIComponent(asset.asset_tag)}`}
@@ -615,11 +615,11 @@ export default function Queue() {
                               style={{ textDecoration: 'none' }}
                               title="Open in inventory"
                             >
-                              <span style={{ display: 'block', color: '#38bdf8', fontWeight: 600, fontSize: 12 }}>
+                              <span style={{ display: 'block', color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>
                                 {asset.device_name || asset.asset_tag}
                               </span>
                               {asset.name && (
-                                <span style={{ display: 'block', color: '#64748b', fontSize: 11 }}>
+                                <span style={{ display: 'block', color: 'var(--muted)', fontSize: 11 }}>
                                   {asset.name}
                                 </span>
                               )}
@@ -627,10 +627,10 @@ export default function Queue() {
                           );
                         })()}
                       </td>
-                      <td style={{ color: '#64748b', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                         {formatDate(t.email_received_at || t.created_at)}
                       </td>
-                      <td style={{ color: '#64748b', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                         {formatDate(t.updated_at)}
                       </td>
                     </tr>
@@ -643,7 +643,7 @@ export default function Queue() {
 
         {/* Row count */}
         {!loading && tickets.length > 0 && (
-          <p style={{ fontSize: 12, color: '#475569', marginTop: '0.5rem', textAlign: 'right' }}>
+          <p style={{ fontSize: 12, color: 'var(--gray)', marginTop: '0.5rem', textAlign: 'right' }}>
             Showing {tickets.length} ticket{tickets.length !== 1 ? 's' : ''}
           </p>
         )}
@@ -655,7 +655,7 @@ export default function Queue() {
 const styles = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
+    background: 'var(--bg)',
     display: 'flex',
     flexDirection: 'column',
   },

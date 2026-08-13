@@ -302,7 +302,7 @@ export default function Reports() {
           {loading ? (
             <div style={styles.emptyState}>Loading…</div>
           ) : error ? (
-            <div style={{ ...styles.emptyState, color: '#f87171' }}>{error}</div>
+            <div style={{ ...styles.emptyState, color: 'var(--red)' }}>{error}</div>
           ) : table.length === 0 ? (
             <div style={styles.emptyState}>No tickets in this range.</div>
           ) : (
@@ -355,7 +355,7 @@ export default function Reports() {
 const styles = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
+    background: 'var(--bg)',
     display: 'flex',
     flexDirection: 'column',
   },
@@ -383,16 +383,16 @@ const styles = {
     alignItems: 'center',
   },
   filterSelect: {
-    background: '#1e293b',
-    color: '#e2e8f0',
-    border: '1px solid #334155',
-    borderRadius: '6px',
+    background: 'var(--surface2)',
+    color: 'var(--text)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
     padding: '0.4rem 0.6rem',
     fontSize: '0.85rem',
   },
   totalPill: {
     fontSize: '0.8rem',
-    color: '#94a3b8',
+    color: 'var(--muted)',
   },
   card: {
     padding: 0,
@@ -407,7 +407,7 @@ const styles = {
   emptyState: {
     padding: '2.5rem',
     textAlign: 'center',
-    color: '#64748b',
+    color: 'var(--muted)',
   },
   numCol: {
     textAlign: 'right',
@@ -418,7 +418,7 @@ const styles = {
   bar: {
     height: '10px',
     borderRadius: '3px',
-    background: '#38bdf8',
+    background: 'var(--accent)',
     minWidth: '2px',
   },
   donutRow: {

@@ -73,7 +73,7 @@ function MessageCard({ msg }) {
   return (
     <div style={{
       ...msgStyles.card,
-      borderLeft: `3px solid ${isInbound ? '#38bdf8' : '#4ade80'}`,
+      borderLeft: `3px solid ${isInbound ? 'var(--accent)' : 'var(--green)'}`,
     }}>
       <div style={msgStyles.header}>
         <div style={msgStyles.headerLeft}>
@@ -82,7 +82,7 @@ function MessageCard({ msg }) {
           </span>
           <span style={msgStyles.from}>
             {msg.from_name ? (
-              <>{msg.from_name} <span style={{ color: '#64748b' }}>({msg.from_email})</span></>
+              <>{msg.from_name} <span style={{ color: 'var(--muted)' }}>({msg.from_email})</span></>
             ) : (
               msg.from_email || '—'
             )}
@@ -92,7 +92,7 @@ function MessageCard({ msg }) {
           {hasHtml && (
             <button
               onClick={() => setShowHtml(v => !v)}
-              style={{ fontSize: 11, color: '#64748b', background: 'none', border: '1px solid #334155', borderRadius: 4, padding: '1px 6px', cursor: 'pointer' }}
+              style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px', cursor: 'pointer' }}
             >
               {showHtml ? 'Plain text' : 'Formatted'}
             </button>
@@ -119,7 +119,7 @@ function MessageCard({ msg }) {
         />
       ) : (
         <div style={msgStyles.body}>
-          {msg.body_text || msg.body_html || <em style={{ color: '#64748b' }}>(empty message)</em>}
+          {msg.body_text || msg.body_html || <em style={{ color: 'var(--muted)' }}>(empty message)</em>}
         </div>
       )}
     </div>
@@ -128,8 +128,8 @@ function MessageCard({ msg }) {
 
 const msgStyles = {
   card: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '8px',
     padding: '0.9rem 1rem',
     marginBottom: '0.75rem',
@@ -153,22 +153,22 @@ const msgStyles = {
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
-    color: '#64748b',
+    color: 'var(--muted)',
   },
   from: {
     fontSize: '13px',
-    color: '#f1f5f9',
+    color: 'var(--text)',
     fontWeight: '500',
   },
   ts: {
     fontSize: '12px',
-    color: '#64748b',
+    color: 'var(--muted)',
     whiteSpace: 'nowrap',
     flexShrink: 0,
   },
   body: {
     fontSize: '13.5px',
-    color: '#cbd5e1',
+    color: 'var(--body)',
     lineHeight: '1.65',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
@@ -223,7 +223,7 @@ function ReplyBox({ ticketId, onReplySent }) {
         style={{ marginBottom: '0.6rem' }}
       />
       <div style={replyStyles.actions}>
-        <span style={{ fontSize: '12px', color: '#475569' }}>Ctrl+Enter to send</span>
+        <span style={{ fontSize: '12px', color: 'var(--gray)' }}>Ctrl+Enter to send</span>
         <button
           className="btn btn-primary"
           onClick={handleSend}
@@ -240,8 +240,8 @@ const replyStyles = {
   wrap: {
     marginTop: '1rem',
     padding: '1rem',
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '8px',
   },
   actions: {
@@ -290,7 +290,7 @@ const evStyles = {
     width: 8,
     height: 8,
     borderRadius: '50%',
-    background: '#334155',
+    background: 'var(--border)',
     marginTop: 5,
     flexShrink: 0,
   },
@@ -302,12 +302,12 @@ const evStyles = {
   },
   text: {
     fontSize: '12.5px',
-    color: '#cbd5e1',
+    color: 'var(--body)',
     lineHeight: 1.4,
   },
   ts: {
     fontSize: '11px',
-    color: '#64748b',
+    color: 'var(--muted)',
   },
 };
 
@@ -388,7 +388,7 @@ export default function Ticket() {
   // ---- Render loading / error --------------------------------------------
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0f172a' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
         <TopBar user={user} onLogout={handleLogout} />
         <div className="spinner-page"><div className="spinner" /></div>
       </div>
@@ -397,7 +397,7 @@ export default function Ticket() {
 
   if (error && !ticket) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0f172a' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
         <TopBar user={user} onLogout={handleLogout} />
         <div style={{ padding: '2rem 1.5rem' }}>
           <div className="error-banner">{error}</div>
@@ -471,7 +471,7 @@ export default function Ticket() {
             </p>
 
             {messages.length === 0 ? (
-              <div style={{ color: '#64748b', fontSize: 13, padding: '1.5rem 0' }}>
+              <div style={{ color: 'var(--muted)', fontSize: 13, padding: '1.5rem 0' }}>
                 No messages yet.
               </div>
             ) : (
@@ -486,11 +486,11 @@ export default function Ticket() {
             <div className="card" style={{ padding: '1.1rem' }}>
               {/* Requester info */}
               <SidebarField label="Requester">
-                <div style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>
+                <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
                   {ticket?.requester_name || '—'}
                 </div>
                 {ticket?.requester_email && (
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                     <a href={`mailto:${ticket.requester_email}`}>{ticket.requester_email}</a>
                   </div>
                 )}
@@ -499,13 +499,13 @@ export default function Ticket() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                 <div>
                   <p className="section-label">Created</p>
-                  <span style={{ fontSize: 12, color: '#cbd5e1' }} title={formatDateFull(ticket?.created_at)}>
+                  <span style={{ fontSize: 12, color: 'var(--body)' }} title={formatDateFull(ticket?.created_at)}>
                     {formatDateRelative(ticket?.created_at)}
                   </span>
                 </div>
                 <div>
                   <p className="section-label">Updated</p>
-                  <span style={{ fontSize: 12, color: '#cbd5e1' }} title={formatDateFull(ticket?.updated_at)}>
+                  <span style={{ fontSize: 12, color: 'var(--body)' }} title={formatDateFull(ticket?.updated_at)}>
                     {formatDateRelative(ticket?.updated_at)}
                   </span>
                 </div>
@@ -576,9 +576,9 @@ export default function Ticket() {
               <div>
                 <p className="section-label" style={{ marginBottom: '0.6rem' }}>Timeline</p>
                 {events.length === 0 ? (
-                  <p style={{ fontSize: 12, color: '#64748b' }}>No events yet.</p>
+                  <p style={{ fontSize: 12, color: 'var(--muted)' }}>No events yet.</p>
                 ) : (
-                  <div style={{ borderLeft: '2px solid #334155', paddingLeft: '0.75rem' }}>
+                  <div style={{ borderLeft: '2px solid var(--border)', paddingLeft: '0.75rem' }}>
                     {events.map((ev, i) => (
                       <EventItem key={ev.id ?? i} ev={ev} />
                     ))}
@@ -597,7 +597,7 @@ export default function Ticket() {
 const pageStyles = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
+    background: 'var(--bg)',
     display: 'flex',
     flexDirection: 'column',
   },
@@ -628,14 +628,14 @@ const pageStyles = {
   },
   ticketNum: {
     fontSize: '14px',
-    color: '#64748b',
+    color: 'var(--muted)',
     fontVariantNumeric: 'tabular-nums',
     flexShrink: 0,
   },
   subject: {
     fontSize: '1.2rem',
     fontWeight: '700',
-    color: '#f1f5f9',
+    color: 'var(--text)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'normal',

@@ -13,6 +13,8 @@
   --body:     #cbd5e1;
   --muted:    #64748b;
   --accent:   #38bdf8;
+  --accent-hover: #7dd3fc;
+  --accent-text:  #0f172a;
   --green:    #4ade80;
   --red:      #f87171;
   --yellow:   #fbbf24;
@@ -22,6 +24,11 @@
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --radius:   6px;
   --radius-lg: 10px;
+  --topbar-bg:     #1e293b;
+  --topbar-text:   #f1f5f9;
+  --topbar-muted:  #94a3b8;
+  --topbar-active: #263347;
+  --topbar-border: #334155;
 }
 
 /* ---- Theme: Light ---- */
@@ -34,12 +41,19 @@
   --body:     #334155;
   --muted:    #64748b;
   --accent:   #0284c7;
+  --accent-hover: #0369a1;
+  --accent-text:  #ffffff;
   --green:    #16a34a;
   --red:      #dc2626;
   --yellow:   #d97706;
   --purple:   #7c3aed;
   --orange:   #ea580c;
   --gray:     #64748b;
+  --topbar-bg:     #1f2937;
+  --topbar-text:   #ffffff;
+  --topbar-muted:  #cbd5e1;
+  --topbar-active: #374151;
+  --topbar-border: #475569;
 }
 
 /* ---- Theme: Dracula ---- */
@@ -52,12 +66,19 @@
   --body:     #f8f8f2;
   --muted:    #6272a4;
   --accent:   #bd93f9;
+  --accent-hover: #a87df0;
+  --accent-text:  #282a36;
   --green:    #50fa7b;
   --red:      #ff5555;
   --yellow:   #f1fa8c;
   --purple:   #ff79c6;
   --orange:   #ffb86c;
   --gray:     #6272a4;
+  --topbar-bg:     #21222c;
+  --topbar-text:   #f8f8f2;
+  --topbar-muted:  #6272a4;
+  --topbar-active: #44475a;
+  --topbar-border: #44475a;
 }
 
 /* ---- Theme: Nord ---- */
@@ -70,12 +91,19 @@
   --body:     #e5e9f0;
   --muted:    #d8dee9;
   --accent:   #88c0d0;
+  --accent-hover: #8fbcbb;
+  --accent-text:  #2e3440;
   --green:    #a3be8c;
   --red:      #bf616a;
   --yellow:   #ebcb8b;
   --purple:   #b48ead;
   --orange:   #d08770;
   --gray:     #4c566a;
+  --topbar-bg:     #242933;
+  --topbar-text:   #eceff4;
+  --topbar-muted:  #d8dee9;
+  --topbar-active: #434c5e;
+  --topbar-border: #4c566a;
 }
 
 /* ---- Theme: Solarized Dark ---- */
@@ -88,12 +116,19 @@
   --body:     #eee8d5;
   --muted:    #93a1a1;
   --accent:   #268bd2;
+  --accent-hover: #2493d4;
+  --accent-text:  #002b36;
   --green:    #859900;
   --red:      #dc322f;
   --yellow:   #b58900;
   --purple:   #6c71c4;
   --orange:   #cb4b16;
   --gray:     #586e75;
+  --topbar-bg:     #001f27;
+  --topbar-text:   #eee8d5;
+  --topbar-muted:  #93a1a1;
+  --topbar-active: #073642;
+  --topbar-border: #586e75;
 }
 
 /* ---- Theme: Monokai ---- */
@@ -106,12 +141,19 @@
   --body:     #f8f8f2;
   --muted:    #a59f85;
   --accent:   #66d9ef;
+  --accent-hover: #4cc4dc;
+  --accent-text:  #272822;
   --green:    #a6e22e;
   --red:      #f92672;
   --yellow:   #e6db74;
   --purple:   #ae81ff;
   --orange:   #fd971f;
   --gray:     #75715e;
+  --topbar-bg:     #1e1f1a;
+  --topbar-text:   #f8f8f2;
+  --topbar-muted:  #a59f85;
+  --topbar-active: #49483e;
+  --topbar-border: #75715e;
 }
 
 /* ---- Reset / Base ---- */
@@ -172,6 +214,79 @@ h1, h2, h3, h4, h5 {
   padding: 1.25rem;
 }
 
+/* ---- Top bar / app switcher ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  height: 56px;
+  background: var(--topbar-bg);
+  color: var(--topbar-text);
+  border-bottom: 1px solid var(--topbar-border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.topbar .left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.topbar .spacer {
+  flex: 1;
+}
+.topbar .right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .user {
+  font-size: 13px;
+  color: var(--topbar-muted);
+}
+.topbar nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.topbar nav a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--topbar-muted);
+  text-decoration: none;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius);
+}
+.topbar nav a:hover {
+  color: var(--topbar-text);
+}
+.topbar nav a.active {
+  font-weight: 600;
+  color: var(--topbar-text);
+  background: var(--topbar-active);
+}
+
+.app-pill {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--topbar-muted);
+  background: transparent;
+  border: 1px solid var(--topbar-border);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.65rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.app-pill.active {
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--topbar-bg));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--topbar-bg));
+  cursor: default;
+}
+
 /* ---- Buttons ---- */
 button, .btn {
   display: inline-flex;
@@ -194,12 +309,12 @@ button:disabled, .btn:disabled {
 
 .btn-primary {
   background: var(--accent);
-  color: #0c1a2e;
+  color: var(--accent-text);
   border-color: var(--accent);
 }
 .btn-primary:hover:not(:disabled) {
-  background: #7dd3fc;
-  border-color: #7dd3fc;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btn-secondary {
@@ -267,7 +382,7 @@ input[type="email"]:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 input::placeholder,
 textarea::placeholder {
@@ -295,18 +410,18 @@ textarea {
   white-space: nowrap;
 }
 
-/* Status badges */
-.badge-open        { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
-.badge-in_progress { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
-.badge-pending     { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192,132,252,0.3); }
-.badge-resolved    { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
-.badge-closed      { background: rgba(71, 85, 105, 0.25); color: #94a3b8; border: 1px solid rgba(71,85,105,0.4); }
+/* Status badges — color-mix against --surface so they recolor per theme */
+.badge-open        { background: color-mix(in srgb, var(--accent) 15%, var(--surface)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--surface)); }
+.badge-in_progress { background: color-mix(in srgb, var(--yellow) 15%, var(--surface)); color: var(--yellow); border: 1px solid color-mix(in srgb, var(--yellow) 30%, var(--surface)); }
+.badge-pending     { background: color-mix(in srgb, var(--purple) 15%, var(--surface)); color: var(--purple); border: 1px solid color-mix(in srgb, var(--purple) 30%, var(--surface)); }
+.badge-resolved    { background: color-mix(in srgb, var(--green) 15%, var(--surface)); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 30%, var(--surface)); }
+.badge-closed      { background: color-mix(in srgb, var(--gray) 25%, var(--surface)); color: var(--muted); border: 1px solid color-mix(in srgb, var(--gray) 40%, var(--surface)); }
 
 /* Priority badges */
-.badge-low    { background: rgba(71, 85, 105, 0.2); color: #94a3b8; border: 1px solid rgba(71,85,105,0.35); }
-.badge-normal { background: rgba(56, 189, 248, 0.12); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.25); }
-.badge-high   { background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
-.badge-urgent { background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+.badge-low    { background: color-mix(in srgb, var(--gray) 20%, var(--surface)); color: var(--muted); border: 1px solid color-mix(in srgb, var(--gray) 35%, var(--surface)); }
+.badge-normal { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--surface)); }
+.badge-high   { background: color-mix(in srgb, var(--orange) 15%, var(--surface)); color: var(--orange); border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--surface)); }
+.badge-urgent { background: color-mix(in srgb, var(--red) 15%, var(--surface)); color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 30%, var(--surface)); }
 
 /* ---- Stat pill (count badge in stats bar) ---- */
 .stat-pill {
