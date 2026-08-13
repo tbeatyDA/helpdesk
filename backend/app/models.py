@@ -164,6 +164,9 @@ class Department(Base):
     # None means "show all columns" — the default/only department today keeps
     # today's behavior unchanged until an admin explicitly narrows it.
     visible_columns: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    # None means this department doesn't poll any mailbox / send replies from
+    # its own address — falls back to settings.helpdesk_email where used.
+    mailbox_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

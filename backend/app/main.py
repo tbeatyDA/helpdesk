@@ -381,6 +381,9 @@ _INPLACE_COLUMN_ADDITIONS: dict[str, dict[str, str]] = {
     "hd_tickets": {
         "department_id": "INTEGER REFERENCES hd_departments(id) ON DELETE SET NULL",
     },
+    "hd_departments": {
+        "mailbox_email": "VARCHAR(320)",
+    },
 }
 
 
@@ -416,10 +419,21 @@ def _seed_default_department() -> None:
     try:
         dept = db.query(Department).first()
         if dept is None:
-            dept = Department(name="IT Support", slug="it", visible_columns=None)
+            dept = Department(name="IT Helpdesk", slug="it", visible_columns=None)
             db.add(dept)
             db.flush()
             logger.info("Seeded default department %r", dept.name)
+
+        # One-time corrections for installs seeded before mailbox_email existed.
+        # Guarded so they only fire once and never touch a value an admin has
+        # since edited — "IT Support" was this seed's original (wrong) name;
+        # the reply signature has always actually said "IT Helpdesk".
+        if dept.name == "IT Support":
+            dept.name = "IT Helpdesk"
+            logger.info("Renamed default department to %r", dept.name)
+        if dept.mailbox_email is None:
+            dept.mailbox_email = settings.helpdesk_email
+            logger.info("Set default department mailbox to %r", dept.mailbox_email)
 
         db.execute(
             text("UPDATE hd_tickets SET department_id = :id WHERE department_id IS NULL"),
