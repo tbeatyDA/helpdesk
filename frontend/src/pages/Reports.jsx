@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
 import { getTicketReport, logout as apiLogout } from '../api.js';
-import SettingsMenu from '../components/SettingsMenu.jsx';
+import TopBar from '../components/TopBar.jsx';
 
 // ---- Helpers ---------------------------------------------------------------
 
@@ -234,7 +233,6 @@ function DonutChart({ series }) {
 
 export default function Reports() {
   const { user, setUser } = useAuth();
-  const navigate = useNavigate();
 
   const [interval, setInterval_] = useState('month');
   const [rows, setRows] = useState([]);
@@ -270,22 +268,7 @@ export default function Reports() {
 
   return (
     <div style={styles.page}>
-      <header style={styles.topBar}>
-        <div style={styles.topBarLeft}>
-          <a href="/" style={styles.appPillLink} onClick={(e) => { e.preventDefault(); navigate('/'); }}>
-            IT Helpdesk
-          </a>
-          <span style={styles.appPillActive}>Reports</span>
-          <a href="https://inventory.dayair.org" style={styles.appPillLink}>IT Inventory</a>
-        </div>
-        <div style={styles.topBarRight}>
-          <span style={styles.userName}>{user?.display_name || user?.email || 'User'}</span>
-          <SettingsMenu />
-          <button className="btn btn-secondary" onClick={handleLogout}>
-            Sign Out
-          </button>
-        </div>
-      </header>
+      <TopBar user={user} onLogout={handleLogout} />
 
       <main style={styles.main}>
         <div style={styles.filterBar}>
@@ -375,53 +358,6 @@ const styles = {
     background: '#0f172a',
     display: 'flex',
     flexDirection: 'column',
-  },
-  topBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 1.5rem',
-    height: '56px',
-    background: '#1e293b',
-    borderBottom: '1px solid #334155',
-    flexShrink: 0,
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-  },
-  topBarLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  appPillActive: {
-    fontSize: '0.85rem',
-    fontWeight: '700',
-    color: '#38bdf8',
-    background: 'rgba(56,189,248,0.12)',
-    border: '1px solid rgba(56,189,248,0.4)',
-    borderRadius: '6px',
-    padding: '0.25rem 0.65rem',
-  },
-  appPillLink: {
-    fontSize: '0.85rem',
-    fontWeight: '500',
-    color: '#94a3b8',
-    background: 'transparent',
-    border: '1px solid #334155',
-    borderRadius: '6px',
-    padding: '0.25rem 0.65rem',
-    textDecoration: 'none',
-    cursor: 'pointer',
-  },
-  topBarRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  userName: {
-    fontSize: '13px',
-    color: '#94a3b8',
   },
   main: {
     flex: 1,

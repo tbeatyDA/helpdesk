@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import SettingsMenu from '../components/SettingsMenu.jsx';
+import TopBar from '../components/TopBar.jsx';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
 import { getTicket, updateTicket, replyToTicket, getUsers, logout as apiLogout, markTicketRead } from '../api.js';
@@ -389,7 +389,7 @@ export default function Ticket() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#0f172a' }}>
-        {renderTopBar(user, handleLogout, navigate)}
+        <TopBar user={user} onLogout={handleLogout} />
         <div className="spinner-page"><div className="spinner" /></div>
       </div>
     );
@@ -398,7 +398,7 @@ export default function Ticket() {
   if (error && !ticket) {
     return (
       <div style={{ minHeight: '100vh', background: '#0f172a' }}>
-        {renderTopBar(user, handleLogout, navigate)}
+        <TopBar user={user} onLogout={handleLogout} />
         <div style={{ padding: '2rem 1.5rem' }}>
           <div className="error-banner">{error}</div>
           <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={() => navigate('/')}>
@@ -415,7 +415,7 @@ export default function Ticket() {
 
   return (
     <div style={pageStyles.page}>
-      {renderTopBar(user, handleLogout, navigate)}
+      <TopBar user={user} onLogout={handleLogout} />
 
       <main style={pageStyles.main}>
         {/* Back link */}
@@ -593,64 +593,6 @@ export default function Ticket() {
   );
 }
 
-// ---- Top bar (shared between loading/error and main render) ---------------
-
-function renderTopBar(user, handleLogout, navigate) {
-  return (
-    <header style={topBarStyle.bar}>
-      <div style={topBarStyle.left}>
-        <button
-          className="btn btn-ghost"
-          onClick={() => navigate('/')}
-          style={{ fontSize: '0.85rem', fontWeight: 700, color: '#38bdf8', background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.4)', borderRadius: '6px', padding: '0.25rem 0.65rem' }}
-        >
-          IT Helpdesk
-        </button>
-        <a
-          href="https://inventory.dayair.org"
-          style={{ fontSize: '0.85rem', fontWeight: 500, color: '#94a3b8', background: 'transparent', border: '1px solid #334155', borderRadius: '6px', padding: '0.25rem 0.65rem', textDecoration: 'none' }}
-        >
-          IT Inventory
-        </a>
-      </div>
-      <div style={topBarStyle.right}>
-        <span style={{ fontSize: 13, color: '#94a3b8' }}>
-          {user?.display_name || user?.email || 'User'}
-        </span>
-        <SettingsMenu />
-        <button className="btn btn-secondary" onClick={handleLogout}>
-          Sign Out
-        </button>
-      </div>
-    </header>
-  );
-}
-
-const topBarStyle = {
-  bar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 1.5rem',
-    height: '56px',
-    background: '#1e293b',
-    borderBottom: '1px solid #334155',
-    flexShrink: 0,
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-  },
-  left: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  right: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-};
 
 const pageStyles = {
   page: {
