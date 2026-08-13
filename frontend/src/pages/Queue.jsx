@@ -130,6 +130,135 @@ function InlineAssignSelect({ value, users, onChange }) {
   );
 }
 
+// ---- Column registry -------------------------------------------------------
+// Header and body rows both map over this same array, so they can't drift out
+// of sync (they used to be two separately-hardcoded lists). It's also the one
+// place a future per-department visible_columns filter, or a custom-field
+// column, plugs in — filter this array before rendering, nothing else changes.
+const COLUMNS = [
+  {
+    key: 'number',
+    label: '#',
+    renderCell: (t) => (
+      <td style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+        #{t.number ?? t.id}
+      </td>
+    ),
+  },
+  {
+    key: 'subject',
+    label: 'Subject',
+    renderCell: (t) => (
+      <td style={{ maxWidth: 280 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+          {t.has_unread && (
+            <span title="New reply from user" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+          )}
+          <span style={{ color: t.has_unread ? 'var(--text)' : 'var(--muted)', fontWeight: t.has_unread ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {t.subject || '(No subject)'}
+          </span>
+        </span>
+      </td>
+    ),
+  },
+  {
+    key: 'requester',
+    label: 'Requester',
+    renderCell: (t) => (
+      <td style={{ color: 'var(--body)', whiteSpace: 'nowrap' }}>
+        {t.requester_name || t.requester_email || '—'}
+      </td>
+    ),
+  },
+  {
+    key: 'priority',
+    label: 'Priority',
+    renderCell: (t, ctx) => (
+      <td onClick={(e) => e.stopPropagation()}>
+        <InlinePrioritySelect
+          value={t.priority || 'normal'}
+          onChange={(val) => ctx.handleInlineUpdate(t.id, { priority: val })}
+        />
+      </td>
+    ),
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    renderCell: (t, ctx) => (
+      <td onClick={(e) => e.stopPropagation()}>
+        <InlineStatusSelect
+          value={t.status || 'open'}
+          onChange={(val) => ctx.handleInlineUpdate(t.id, { status: val })}
+        />
+      </td>
+    ),
+  },
+  {
+    key: 'assigned',
+    label: 'Assigned To',
+    renderCell: (t, ctx) => (
+      <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+        <InlineAssignSelect
+          value={t.assigned_to?.id ?? t.assigned_to_id ?? null}
+          users={ctx.users}
+          onChange={(val) => ctx.handleInlineUpdate(t.id, { assigned_to_id: val })}
+        />
+      </td>
+    ),
+  },
+  {
+    key: 'asset',
+    label: 'Asset',
+    // Not a Ticket field — a live join against the inventory app's assets
+    // table, keyed by requester email. Needs ctx.assetMap, not just the ticket.
+    renderCell: (t, ctx) => (
+      <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+        {(() => {
+          const asset = ctx.assetMap[t.requester_email];
+          if (!asset) return <span style={{ color: 'var(--gray)' }}>—</span>;
+          return (
+            <a
+              href={`https://inventory.dayair.org/assets?q=${encodeURIComponent(asset.asset_tag)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none' }}
+              title="Open in inventory"
+            >
+              <span style={{ display: 'block', color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>
+                {asset.device_name || asset.asset_tag}
+              </span>
+              {asset.name && (
+                <span style={{ display: 'block', color: 'var(--muted)', fontSize: 11 }}>
+                  {asset.name}
+                </span>
+              )}
+            </a>
+          );
+        })()}
+      </td>
+    ),
+  },
+  {
+    key: 'received',
+    label: 'Received',
+    renderCell: (t) => (
+      <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        {formatDate(t.email_received_at || t.created_at)}
+      </td>
+    ),
+  },
+  {
+    key: 'updated',
+    label: 'Updated',
+    renderCell: (t) => (
+      <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        {formatDate(t.updated_at)}
+      </td>
+    ),
+  },
+];
+
 // ---- Stats bar -----------------------------------------------------------
 
 function StatsBar({ stats, onStatClick, activeStatus }) {
@@ -523,25 +652,15 @@ export default function Queue() {
                         aria-label="Select all tickets"
                       />
                     </th>
-                    {[
-                      { col: 'number', label: '#' },
-                      { col: 'subject', label: 'Subject' },
-                      { col: 'requester', label: 'Requester' },
-                      { col: 'priority', label: 'Priority' },
-                      { col: 'status', label: 'Status' },
-                      { col: 'assigned', label: 'Assigned To' },
-                      { col: 'asset', label: 'Asset' },
-                      { col: 'received', label: 'Received' },
-                      { col: 'updated', label: 'Updated' },
-                    ].map(({ col, label }) => (
+                    {COLUMNS.map(({ key, label }) => (
                       <th
-                        key={col}
-                        onClick={() => handleSortClick(col)}
+                        key={key}
+                        onClick={() => handleSortClick(key)}
                         style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         title={`Sort by ${label}`}
                       >
                         {label}
-                        {sortCol === col ? (
+                        {sortCol === key ? (
                           <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>
                             {sortDir === 'asc' ? '▲' : '▼'}
                           </span>
@@ -568,71 +687,11 @@ export default function Queue() {
                           aria-label={`Select ticket ${t.number}`}
                         />
                       </td>
-                      <td style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        #{t.number ?? t.id}
-                      </td>
-                      <td style={{ maxWidth: 280 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                          {t.has_unread && (
-                            <span title="New reply from user" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-                          )}
-                          <span style={{ color: t.has_unread ? 'var(--text)' : 'var(--muted)', fontWeight: t.has_unread ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {t.subject || '(No subject)'}
-                          </span>
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--body)', whiteSpace: 'nowrap' }}>
-                        {t.requester_name || t.requester_email || '—'}
-                      </td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <InlinePrioritySelect
-                          value={t.priority || 'normal'}
-                          onChange={val => handleInlineUpdate(t.id, { priority: val })}
-                        />
-                      </td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <InlineStatusSelect
-                          value={t.status || 'open'}
-                          onChange={val => handleInlineUpdate(t.id, { status: val })}
-                        />
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                        <InlineAssignSelect
-                          value={t.assigned_to?.id ?? t.assigned_to_id ?? null}
-                          users={users}
-                          onChange={val => handleInlineUpdate(t.id, { assigned_to_id: val })}
-                        />
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const asset = assetMap[t.requester_email];
-                          if (!asset) return <span style={{ color: 'var(--gray)' }}>—</span>;
-                          return (
-                            <a
-                              href={`https://inventory.dayair.org/assets?q=${encodeURIComponent(asset.asset_tag)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ textDecoration: 'none' }}
-                              title="Open in inventory"
-                            >
-                              <span style={{ display: 'block', color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>
-                                {asset.device_name || asset.asset_tag}
-                              </span>
-                              {asset.name && (
-                                <span style={{ display: 'block', color: 'var(--muted)', fontSize: 11 }}>
-                                  {asset.name}
-                                </span>
-                              )}
-                            </a>
-                          );
-                        })()}
-                      </td>
-                      <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                        {formatDate(t.email_received_at || t.created_at)}
-                      </td>
-                      <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                        {formatDate(t.updated_at)}
-                      </td>
+                      {COLUMNS.map((col) => (
+                        <React.Fragment key={col.key}>
+                          {col.renderCell(t, { users, assetMap, handleInlineUpdate })}
+                        </React.Fragment>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
