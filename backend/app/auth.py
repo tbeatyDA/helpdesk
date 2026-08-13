@@ -6,12 +6,13 @@ from typing import Optional
 import msal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.database import get_db
-from app.models import User
-from app.schemas import UserOut
+from app.helpers import _auto_assign_default_department
+from app.models import DepartmentMember, User
+from app.schemas import MeOut, UserOut
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ def _get_or_create_user(db: Session, upn: str, display_name: str, email: str) ->
         db.add(user)
         db.commit()
         db.refresh(user)
+        _auto_assign_default_department(db, user)
     elif not user.is_active:
         # The admin-users env var only seeds a brand-new user's initial role — once a
         # user row exists, role/is_active are admin-managed (see the admin page) and
@@ -157,9 +159,27 @@ def logout(request: Request):
     return JSONResponse({"ok": True})
 
 
-@router.get("/me", response_model=UserOut)
-def me(user: User = Depends(current_user)):
-    return user
+@router.get("/me", response_model=MeOut)
+def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    memberships = (
+        db.query(DepartmentMember)
+        .options(joinedload(DepartmentMember.department))
+        .filter(DepartmentMember.user_id == user.id)
+        .all()
+    )
+    return MeOut(
+        id=user.id, upn=user.upn, display_name=user.display_name, email=user.email,
+        role=user.role, is_active=user.is_active,
+        departments=[
+            {
+                "id": m.department.id,
+                "name": m.department.name,
+                "slug": m.department.slug,
+                "visible_columns": m.department.visible_columns,
+            }
+            for m in memberships
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +204,7 @@ def dev_login(request: Request, upn: str, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+        _auto_assign_default_department(db, user)
 
     request.session["user_id"] = user.id
     request.session["user_upn"] = user.upn

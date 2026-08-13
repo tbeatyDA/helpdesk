@@ -17,6 +17,91 @@ class UserOut(BaseModel):
     is_active: bool
 
 
+class DepartmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    slug: str
+    visible_columns: Optional[list[str]]
+
+
+class DepartmentCreate(BaseModel):
+    name: str
+    slug: str
+    visible_columns: Optional[list[str]] = None
+
+    @field_validator("slug")
+    @classmethod
+    def slug_must_be_slug(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not v or not all(c.isalnum() or c == "-" for c in v):
+            raise ValueError("slug must be lowercase letters, numbers, and hyphens only")
+        return v
+
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    visible_columns: Optional[list[str]] = None
+
+
+class DepartmentMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    department_id: int
+    user_id: int
+    user: UserOut
+
+
+class DepartmentMembershipOut(BaseModel):
+    """A department as seen from the member's own side (via /me) — no need
+    for the join-row id, just what the frontend needs to render a picker."""
+
+    id: int
+    name: str
+    slug: str
+    visible_columns: Optional[list[str]]
+
+
+class MeOut(UserOut):
+    """Richer response for /me only. Kept separate from UserOut, which is
+    embedded in ticket responses (assigned_to) — those shouldn't carry
+    department data repeated once per ticket row."""
+
+    departments: list[DepartmentMembershipOut]
+
+
+class AdminUserOut(UserOut):
+    """User list for the admin page — includes department memberships."""
+
+    departments: list[DepartmentMembershipOut]
+
+
+class AdminUserUpdate(BaseModel):
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("role")
+    @classmethod
+    def role_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("admin", "staff"):
+            raise ValueError("role must be 'admin' or 'staff'")
+        return v
+
+
+class DepartmentMembershipCreate(BaseModel):
+    department_id: int
+
+
+class DepartmentAdminOut(DepartmentOut):
+    """Departments list for the admin page — includes counts."""
+
+    member_count: int
+    ticket_count: int
+
+
 class TicketMessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

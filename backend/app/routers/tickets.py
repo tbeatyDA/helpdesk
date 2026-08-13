@@ -13,7 +13,7 @@ from app.auth import current_user
 from app.config import settings
 from app.database import get_db
 from app.helpers import _add_event, _next_ticket_number, _normalize_subject
-from app.models import Ticket, TicketEvent, TicketMessage, User
+from app.models import DepartmentMember, Ticket, TicketEvent, TicketMessage, User
 from app.schemas import BulkDeleteRequest, ReplyCreate, TicketListItem, TicketOut, TicketUpdate, UserOut
 
 logger = logging.getLogger(__name__)
@@ -47,11 +47,32 @@ def list_tickets(
     exclude_closed: bool = False,
     priority: Optional[str] = None,
     assigned_to_id: Optional[int] = None,
+    department_id: Optional[int] = None,
     q: Optional[str] = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     query = db.query(Ticket).options(joinedload(Ticket.assigned_to))
+
+    # Admins with no department_id see everything (unchanged default). A non-admin
+    # with no department_id sees all of THEIR departments' tickets — for today's
+    # one-department world that's every ticket, same as before this existed.
+    if department_id is not None:
+        if user.role != "admin":
+            is_member = (
+                db.query(DepartmentMember)
+                .filter_by(user_id=user.id, department_id=department_id)
+                .first()
+            )
+            if not is_member:
+                raise HTTPException(status_code=403, detail="Not a member of that department")
+        query = query.filter(Ticket.department_id == department_id)
+    elif user.role != "admin":
+        member_dept_ids = [
+            m.department_id
+            for m in db.query(DepartmentMember).filter_by(user_id=user.id).all()
+        ]
+        query = query.filter(Ticket.department_id.in_(member_dept_ids))
 
     if status:
         query = query.filter(Ticket.status == status)

@@ -509,11 +509,13 @@ app.add_middleware(
 
 from app.auth import router as auth_router  # noqa: E402
 from app.routers.tickets import router as tickets_router, users_router, assets_router  # noqa: E402
+from app.routers.admin import router as admin_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(tickets_router)
 app.include_router(users_router)
 app.include_router(assets_router)
+app.include_router(admin_router)
 
 
 # ---------------------------------------------------------------------------

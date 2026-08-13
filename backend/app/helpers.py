@@ -6,7 +6,20 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Ticket, TicketEvent
+from app.models import Department, DepartmentMember, Ticket, TicketEvent, User
+
+
+def _auto_assign_default_department(db: Session, user: User) -> None:
+    """If exactly one department exists, add a newly created user to it —
+    keeps today's "everyone sees everything" behavior for single-department
+    deployments. Once a second department exists, which department a new
+    hire belongs to is no longer obvious, so that becomes an explicit admin
+    action instead (via the admin page) rather than a guess made here.
+    """
+    departments = db.query(Department).all()
+    if len(departments) == 1:
+        db.add(DepartmentMember(department_id=departments[0].id, user_id=user.id))
+        db.commit()
 
 
 def _next_ticket_number(db: Session) -> str:

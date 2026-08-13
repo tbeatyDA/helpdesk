@@ -43,6 +43,9 @@ class User(Base):
     events: Mapped[list["TicketEvent"]] = relationship(
         "TicketEvent", back_populates="actor", foreign_keys="TicketEvent.actor_id"
     )
+    department_memberships: Mapped[list["DepartmentMember"]] = relationship(
+        "DepartmentMember", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Ticket(Base):
@@ -186,4 +189,4 @@ class DepartmentMember(Base):
     )
 
     department: Mapped["Department"] = relationship("Department", back_populates="members")
-    user: Mapped["User"] = relationship("User")
+    user: Mapped["User"] = relationship("User", back_populates="department_memberships")
