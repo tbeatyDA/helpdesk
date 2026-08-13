@@ -52,7 +52,183 @@ function pivot(rows) {
   const grandTotal = table.reduce((a, r) => a + r.rowTotal, 0);
   const maxRowTotal = table.reduce((m, r) => Math.max(m, r.rowTotal), 0);
 
-  return { periods, columns, table, grandTotal, maxRowTotal };
+  return { periods, columns, table, grandTotal, maxRowTotal, totalsByColumn };
+}
+
+// ---- Donut chart (share of tickets per tech, aggregated over the range) ----
+
+// Fixed categorical hue order — identity, never rank. Colors live in CSS vars
+// (see DONUT_STYLE) so they can differ between the light theme and the rest.
+const SERIES_VARS = ['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6'];
+const MAX_SLICES = SERIES_VARS.length;
+
+const DONUT_STYLE = `
+  .donut-wrap {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+  }
+  :root[data-theme="light"] .donut-wrap {
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+  }
+`;
+
+/**
+ * Build donut slices from the pivoted columns/totals. Colors are assigned in a
+ * fixed identity order (alphabetical by label, "Unassigned" pinned last) so a
+ * given tech keeps the same color across filter changes — never by rank.
+ * Beyond MAX_SLICES, the smallest-by-value columns fold into a gray "Other".
+ */
+function buildDonutSeries(columns, totalsByColumn) {
+  if (columns.length < 2) return [];
+
+  const ordered = [...columns].sort((a, b) => {
+    if (a.key === 'unassigned') return 1;
+    if (b.key === 'unassigned') return -1;
+    return a.label.localeCompare(b.label);
+  });
+
+  let kept = ordered;
+  let otherTotal = 0;
+  if (ordered.length > MAX_SLICES) {
+    const byValueDesc = [...ordered].sort(
+      (a, b) => (totalsByColumn.get(b.key) || 0) - (totalsByColumn.get(a.key) || 0)
+    );
+    const keepSet = new Set(byValueDesc.slice(0, MAX_SLICES - 1).map((c) => c.key));
+    kept = ordered.filter((c) => keepSet.has(c.key));
+    otherTotal = ordered
+      .filter((c) => !keepSet.has(c.key))
+      .reduce((sum, c) => sum + (totalsByColumn.get(c.key) || 0), 0);
+  }
+
+  const series = kept.map((c, i) => ({
+    key: c.key,
+    label: c.label,
+    count: totalsByColumn.get(c.key) || 0,
+    colorVar: `var(${SERIES_VARS[i % SERIES_VARS.length]})`,
+  }));
+  if (otherTotal > 0) {
+    series.push({ key: '__other__', label: 'Other', count: otherTotal, colorVar: 'var(--muted)' });
+  }
+  return series.filter((s) => s.count > 0);
+}
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function donutSlicePath(cx, cy, rOuter, rInner, startAngle, endAngle) {
+  const so = polarToCartesian(cx, cy, rOuter, endAngle);
+  const eo = polarToCartesian(cx, cy, rOuter, startAngle);
+  const si = polarToCartesian(cx, cy, rInner, startAngle);
+  const ei = polarToCartesian(cx, cy, rInner, endAngle);
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return [
+    `M ${so.x} ${so.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 0 ${eo.x} ${eo.y}`,
+    `L ${ei.x} ${ei.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 1 ${si.x} ${si.y}`,
+    'Z',
+  ].join(' ');
+}
+
+const GAP_DEG = 1.8; // visual separation between slices, skipped on slivers too thin to carry it
+
+function DonutChart({ series }) {
+  const [activeKey, setActiveKey] = useState(null);
+  const total = series.reduce((sum, s) => sum + s.count, 0);
+  if (total === 0) return null;
+
+  const size = 220;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = 100;
+  const rInner = 62;
+
+  let cursor = 0;
+  const slices = series.map((s) => {
+    const sweep = (s.count / total) * 360;
+    const start = cursor;
+    const end = cursor + sweep;
+    cursor = end;
+    const gap = sweep > GAP_DEG * 2 ? GAP_DEG : 0;
+    return { ...s, start: start + gap / 2, end: end - gap / 2, pct: (s.count / total) * 100 };
+  });
+
+  const active = activeKey ? series.find((s) => s.key === activeKey) : null;
+
+  return (
+    <div className="donut-wrap" style={styles.donutRow}>
+      <style>{DONUT_STYLE}</style>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={`Ticket share by tech: ${series
+          .map((s) => `${s.label} ${Math.round((s.count / total) * 100)}%`)
+          .join(', ')}`}
+      >
+        {slices.map((s) => (
+          <path
+            key={s.key}
+            d={donutSlicePath(cx, cy, rOuter, rInner, s.start, s.end)}
+            fill={s.colorVar}
+            opacity={activeKey && activeKey !== s.key ? 0.45 : 1}
+            style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+            tabIndex={0}
+            role="button"
+            aria-label={`${s.label}: ${s.count} tickets, ${Math.round(s.pct)} percent`}
+            onPointerEnter={() => setActiveKey(s.key)}
+            onPointerLeave={() => setActiveKey(null)}
+            onFocus={() => setActiveKey(s.key)}
+            onBlur={() => setActiveKey(null)}
+          >
+            <title>{`${s.label}: ${s.count} (${Math.round(s.pct)}%)`}</title>
+          </path>
+        ))}
+        <text x={cx} y={cy - 6} textAnchor="middle" style={styles.donutCenterValue}>
+          {active ? active.count : total}
+        </text>
+        <text x={cx} y={cy + 14} textAnchor="middle" style={styles.donutCenterLabel}>
+          {active ? active.label : 'Total'}
+        </text>
+      </svg>
+
+      <ul style={styles.legend}>
+        {series.map((s) => (
+          <li key={s.key}>
+            <button
+              type="button"
+              style={{
+                ...styles.legendRow,
+                opacity: activeKey && activeKey !== s.key ? 0.55 : 1,
+              }}
+              onPointerEnter={() => setActiveKey(s.key)}
+              onPointerLeave={() => setActiveKey(null)}
+              onFocus={() => setActiveKey(s.key)}
+              onBlur={() => setActiveKey(null)}
+            >
+              <span style={{ ...styles.legendSwatch, background: s.colorVar }} />
+              <span style={styles.legendLabel}>{s.label}</span>
+              <span style={styles.legendValue}>
+                {s.count} · {Math.round((s.count / total) * 100)}%
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // ---- Page -------------------------------------------------------------------
@@ -86,7 +262,11 @@ export default function Reports() {
     };
   }, [interval, groupBy]);
 
-  const { columns, table, grandTotal, maxRowTotal } = useMemo(() => pivot(rows), [rows]);
+  const { columns, table, grandTotal, maxRowTotal, totalsByColumn } = useMemo(() => pivot(rows), [rows]);
+  const donutSeries = useMemo(
+    () => (groupBy === 'tech' ? buildDonutSeries(columns, totalsByColumn) : []),
+    [groupBy, columns, totalsByColumn]
+  );
 
   async function handleLogout() {
     await apiLogout();
@@ -141,6 +321,13 @@ export default function Reports() {
             </span>
           </div>
         </div>
+
+        {!loading && !error && donutSeries.length >= 2 && (
+          <div className="card" style={styles.card}>
+            <div style={styles.cardHeader}>Share of tickets by tech</div>
+            <DonutChart series={donutSeries} />
+          </div>
+        )}
 
         <div className="card" style={styles.card}>
           {loading ? (
@@ -289,6 +476,12 @@ const styles = {
     padding: 0,
     overflow: 'hidden',
   },
+  cardHeader: {
+    padding: '1rem 1.25rem 0',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: 'var(--text)',
+  },
   emptyState: {
     padding: '2.5rem',
     textAlign: 'center',
@@ -305,5 +498,61 @@ const styles = {
     borderRadius: '3px',
     background: '#38bdf8',
     minWidth: '2px',
+  },
+  donutRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2rem',
+    flexWrap: 'wrap',
+    padding: '1rem 1.25rem 1.25rem',
+  },
+  donutCenterValue: {
+    fontSize: '28px',
+    fontWeight: 700,
+    fill: 'var(--text)',
+    fontFamily: 'inherit',
+  },
+  donutCenterLabel: {
+    fontSize: '12px',
+    fill: 'var(--muted)',
+    fontFamily: 'inherit',
+  },
+  legend: {
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.3rem',
+    minWidth: '220px',
+  },
+  legendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.6rem',
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    padding: '0.35rem 0.5rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  legendSwatch: {
+    width: '10px',
+    height: '10px',
+    minWidth: '10px',
+    borderRadius: '3px',
+  },
+  legendLabel: {
+    flex: 1,
+    fontSize: '0.85rem',
+    color: 'var(--text)',
+  },
+  legendValue: {
+    fontSize: '0.8rem',
+    color: 'var(--muted)',
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap',
   },
 };
