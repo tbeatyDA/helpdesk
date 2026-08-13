@@ -20,6 +20,11 @@ export default function TopBar({ user, onLogout }) {
         <NavLink to="/reports" className={({ isActive }) => (isActive ? 'active' : undefined)}>
           Reports
         </NavLink>
+        {user?.role === 'admin' && (
+          <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : undefined)}>
+            Admin
+          </NavLink>
+        )}
       </nav>
       <div className="spacer" />
       <div className="right">

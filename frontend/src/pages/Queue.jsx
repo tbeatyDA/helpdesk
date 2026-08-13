@@ -135,7 +135,7 @@ function InlineAssignSelect({ value, users, onChange }) {
 // of sync (they used to be two separately-hardcoded lists). It's also the one
 // place a future per-department visible_columns filter, or a custom-field
 // column, plugs in — filter this array before rendering, nothing else changes.
-const COLUMNS = [
+export const COLUMNS = [
   {
     key: 'number',
     label: '#',

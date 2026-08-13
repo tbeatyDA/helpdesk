@@ -5,6 +5,7 @@ import Login from './pages/Login.jsx';
 import Queue from './pages/Queue.jsx';
 import Ticket from './pages/Ticket.jsx';
 import Reports from './pages/Reports.jsx';
+import Admin from './pages/Admin.jsx';
 import { applyTheme, getStoredTheme } from './components/SettingsMenu.jsx';
 
 // Apply persisted theme immediately on load
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/" element={<Queue />} />
         <Route path="/tickets/:id" element={<Ticket />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/admin" element={user.role === 'admin' ? <Admin /> : <Navigate to="/" replace />} />
         {/* Catch-all: redirect unknown paths to queue */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

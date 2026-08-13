@@ -132,3 +132,59 @@ export function pollEmails() {
 export function markTicketRead(id) {
   return apiFetch(`/tickets/${id}/read`, { method: 'POST' });
 }
+
+// ---- Admin (require an admin session; backend enforces this) --------------
+
+/** List departments, each with member/ticket counts. */
+export function getDepartments() {
+  return apiFetch('/admin/departments');
+}
+
+/** Create a department. @param {Object} data - { name, slug, visible_columns } */
+export function createDepartment(data) {
+  return apiFetch('/admin/departments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Update a department. @param {Object} data - { name?, slug?, visible_columns? } */
+export function updateDepartment(id, data) {
+  return apiFetch(`/admin/departments/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete a department (blocked if it's the only one left). */
+export function deleteDepartment(id) {
+  return apiFetch(`/admin/departments/${id}`, { method: 'DELETE' });
+}
+
+/** List every user with their department memberships. */
+export function getAdminUsers() {
+  return apiFetch('/admin/users');
+}
+
+/** Update a user's global role/active state. @param {Object} data - { role?, is_active? } */
+export function updateAdminUser(id, data) {
+  return apiFetch(`/admin/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Add a user to a department. */
+export function addUserDepartment(userId, departmentId) {
+  return apiFetch(`/admin/users/${userId}/departments`, {
+    method: 'POST',
+    body: JSON.stringify({ department_id: departmentId }),
+  });
+}
+
+/** Remove a user from a department. */
+export function removeUserDepartment(userId, departmentId) {
+  return apiFetch(`/admin/users/${userId}/departments/${departmentId}`, {
+    method: 'DELETE',
+  });
+}
