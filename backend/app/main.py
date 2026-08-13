@@ -16,9 +16,9 @@ from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.graph import GraphMailClient
 from app.helpers import _add_event, _next_ticket_number, _normalize_subject, _strip_reply_prefixes
-from sqlalchemy import func
+from sqlalchemy import func, text
 
-from app.models import SeenGraphId, Ticket, TicketMessage, User
+from app.models import Department, DepartmentMember, SeenGraphId, Ticket, TicketMessage, User
 
 logging.basicConfig(
     level=logging.INFO,
@@ -376,12 +376,78 @@ async def poll_loop() -> None:
 # App lifespan
 # ---------------------------------------------------------------------------
 
+# Columns added incrementally as features ship. (table -> {column: ALTER fragment})
+_INPLACE_COLUMN_ADDITIONS: dict[str, dict[str, str]] = {
+    "hd_tickets": {
+        "department_id": "INTEGER REFERENCES hd_departments(id) ON DELETE SET NULL",
+    },
+}
+
+
+def _apply_inplace_migrations() -> None:
+    """Idempotent ALTER TABLE statements for additive schema changes.
+
+    `Base.metadata.create_all()` only CREATES missing tables — it doesn't add
+    columns to existing ones. This applies any additive columns the ORM has
+    but the live DB doesn't. When the schema gets bigger, swap this for
+    Alembic. (Mirrors the same convention in the sibling inventory app.)
+    """
+    with engine.begin() as conn:
+        for table, cols in _INPLACE_COLUMN_ADDITIONS.items():
+            for col, ddl in cols.items():
+                conn.execute(text(
+                    f"DO $$ BEGIN "
+                    f"IF NOT EXISTS (SELECT 1 FROM information_schema.columns "
+                    f"WHERE table_name='{table}' AND column_name='{col}') THEN "
+                    f"ALTER TABLE {table} ADD COLUMN {col} {ddl}; "
+                    f"END IF; END $$;"
+                ))
+    logger.info("In-place migrations applied.")
+
+
+def _seed_default_department() -> None:
+    """Ensure a default department exists and every ticket/active user is in it.
+
+    Idempotent — safe to run on every startup. Without the membership backfill,
+    the moment department-based ticket filtering ships, every existing staff
+    user would have zero memberships and see nothing.
+    """
+    db = SessionLocal()
+    try:
+        dept = db.query(Department).first()
+        if dept is None:
+            dept = Department(name="IT Support", slug="it", visible_columns=None)
+            db.add(dept)
+            db.flush()
+            logger.info("Seeded default department %r", dept.name)
+
+        db.execute(
+            text("UPDATE hd_tickets SET department_id = :id WHERE department_id IS NULL"),
+            {"id": dept.id},
+        )
+
+        existing_member_ids = {
+            m.user_id for m in db.query(DepartmentMember).filter_by(department_id=dept.id)
+        }
+        added = 0
+        for user in db.query(User).filter(User.is_active == True):
+            if user.id not in existing_member_ids:
+                db.add(DepartmentMember(department_id=dept.id, user_id=user.id))
+                added += 1
+        if added:
+            logger.info("Added %d user(s) to default department", added)
+
+        db.commit()
+    finally:
+        db.close()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create helpdesk tables on startup (existing inventory tables are untouched)
     logger.info("Running table migrations...")
     Base.metadata.create_all(bind=engine)
+    _apply_inplace_migrations()
     logger.info("Tables ready.")
 
     # Seed any configured users that haven't logged in yet
@@ -398,6 +464,8 @@ async def lifespan(app: FastAPI):
             db.commit()
         finally:
             db.close()
+
+    _seed_default_department()
 
     # Launch background email poller
     poll_task = asyncio.create_task(poll_loop())

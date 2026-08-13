@@ -11,8 +11,10 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -57,6 +59,9 @@ class Ticket(Base):
     assigned_to_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    department_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("hd_departments.id", ondelete="SET NULL"), nullable=True
+    )
     has_unread: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     first_message_id: Mapped[Optional[str]] = mapped_column(String(998), nullable=True)
     email_received_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -82,6 +87,7 @@ class Ticket(Base):
     assigned_to: Mapped[Optional["User"]] = relationship(
         "User", back_populates="assigned_tickets", foreign_keys=[assigned_to_id]
     )
+    department: Mapped[Optional["Department"]] = relationship("Department")
 
 
 class TicketMessage(Base):
@@ -144,3 +150,40 @@ class TicketEvent(Base):
     actor: Mapped[Optional["User"]] = relationship(
         "User", back_populates="events", foreign_keys=[actor_id]
     )
+
+
+class Department(Base):
+    __tablename__ = "hd_departments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    slug: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    # None means "show all columns" — the default/only department today keeps
+    # today's behavior unchanged until an admin explicitly narrows it.
+    visible_columns: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    members: Mapped[list["DepartmentMember"]] = relationship(
+        "DepartmentMember", back_populates="department", cascade="all, delete-orphan"
+    )
+
+
+class DepartmentMember(Base):
+    __tablename__ = "hd_department_members"
+    __table_args__ = (UniqueConstraint("department_id", "user_id", name="uq_department_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    department_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("hd_departments.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    department: Mapped["Department"] = relationship("Department", back_populates="members")
+    user: Mapped["User"] = relationship("User")
