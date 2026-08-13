@@ -69,14 +69,11 @@ def _get_or_create_user(db: Session, upn: str, display_name: str, email: str) ->
         db.add(user)
         db.commit()
         db.refresh(user)
-    else:
-        # Update role if they are in admin list
-        new_role = "admin" if upn.lower() in settings.admin_users_list else "staff"
-        if user.role != new_role or not user.is_active:
-            user.role = new_role
-            user.is_active = True
-            db.commit()
-            db.refresh(user)
+    elif not user.is_active:
+        # The admin-users env var only seeds a brand-new user's initial role — once a
+        # user row exists, role/is_active are admin-managed (see the admin page) and
+        # login no longer resyncs them from the allowlist.
+        raise HTTPException(status_code=403, detail="Account deactivated")
     return user
 
 
