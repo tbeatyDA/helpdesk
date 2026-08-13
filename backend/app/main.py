@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.graph import GraphMailClient
-from app.helpers import _add_event, _next_ticket_number, _normalize_subject
+from app.helpers import _add_event, _next_ticket_number, _normalize_subject, _strip_reply_prefixes
 from sqlalchemy import func
 
 from app.models import SeenGraphId, Ticket, TicketMessage, User
@@ -192,6 +192,8 @@ async def process_new_emails() -> None:
                     or _extract_header(inet_headers, "Message-ID")
                 )
                 in_reply_to: Optional[str] = _extract_header(inet_headers, "In-Reply-To")
+                references_header: Optional[str] = _extract_header(inet_headers, "References")
+                reference_ids: list[str] = references_header.split() if references_header else []
 
                 # Parse received timestamp
                 received_dt_str: Optional[str] = msg.get("receivedDateTime")
@@ -247,11 +249,14 @@ async def process_new_emails() -> None:
                 # ------------------------------------------------------------------
                 ticket: Optional[Ticket] = None
 
-                # 1. Match by In-Reply-To → existing message_id (most reliable)
-                if in_reply_to:
+                # 1. Match by In-Reply-To or References → existing message_id (most
+                # reliable). References carries the whole thread chain, so it can
+                # still find the ticket when a client drops In-Reply-To on forward.
+                thread_ids = [mid for mid in [in_reply_to, *reference_ids] if mid]
+                if thread_ids:
                     existing_msg = (
                         db.query(TicketMessage)
-                        .filter(TicketMessage.message_id == in_reply_to)
+                        .filter(TicketMessage.message_id.in_(thread_ids))
                         .first()
                     )
                     if existing_msg:
@@ -284,7 +289,7 @@ async def process_new_emails() -> None:
                 # 4. Create new ticket
                 if ticket is None:
                     subject_for_ticket = (
-                        re.sub(r"(?i)^\s*(re|fwd|fw)\s*:\s*", "", raw_subject).strip()
+                        _strip_reply_prefixes(raw_subject).strip()
                         or raw_subject
                         or "(No Subject)"
                     )

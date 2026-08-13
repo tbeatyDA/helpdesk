@@ -43,11 +43,22 @@ def _add_event(
     return event
 
 
+_REPLY_PREFIX_RE = re.compile(r"(?i)^\s*(?:(?:re|fwd?)\s*:\s*)+")
+
+
+def _strip_reply_prefixes(subject: str) -> str:
+    """Strip any number of leading Re:/Fw:/Fwd: prefixes.
+
+    Forwarding a reply stacks prefixes (e.g. "Fwd: Re: blah"). A regex that only
+    strips one pass leaves a mismatched leftover prefix, which breaks the fuzzy
+    subject match in _normalize_subject below and causes duplicate tickets.
+    """
+    return _REPLY_PREFIX_RE.sub("", subject or "")
+
+
 def _normalize_subject(subject: str) -> str:
     """Strip reply/forward prefixes, ticket numbers, and whitespace for fuzzy matching."""
-    s = subject or ""
-    # Remove common reply/forward prefixes (case-insensitive, possibly repeated)
-    s = re.sub(r"(?i)^\s*(re|fwd|fw)\s*:\s*", "", s, flags=re.IGNORECASE)
+    s = _strip_reply_prefixes(subject)
     # Remove ticket number tags like [HD-000001]
     s = re.sub(r"\[HD-\d+\]", "", s, flags=re.IGNORECASE)
     return s.strip().lower()
