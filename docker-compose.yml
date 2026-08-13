@@ -1,0 +1,45 @@
+# docker-compose.yml — Day Air IT Helpdesk
+#
+# Run from /opt/helpdesk/:
+#   docker compose up -d --build
+#
+# Required: /opt/helpdesk/.env (copy .env.example and fill in values)
+#
+# Networks:
+#   default           — internal; frontend talks to backend here
+#   inventory_net     — shared with it-inventory; backend reaches the
+#                       Postgres DB and Caddy reaches both containers
+
+services:
+  helpdesk-backend:
+    build: ./backend
+    image: helpdesk-backend:prod
+    container_name: helpdesk-backend
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /opt/helpdesk/helpdesk-graph.key:/opt/helpdesk/helpdesk-graph.key:ro
+    expose:
+      - "8000"
+    networks:
+      - default
+      - inventory_net
+
+  helpdesk-frontend:
+    build: ./frontend
+    image: helpdesk-frontend:prod
+    container_name: helpdesk-frontend
+    restart: unless-stopped
+    depends_on:
+      - helpdesk-backend
+    expose:
+      - "80"
+    networks:
+      - default
+      - inventory_net
+
+networks:
+  default:
+  inventory_net:
+    external: true
+    name: it-inventory_default

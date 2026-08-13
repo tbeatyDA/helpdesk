@@ -1,0 +1,14 @@
+# Environment files: ignore everything except the *.example templates.
+.env
+.env.*
+!.env.example
+
+# Private key for Graph API certificate auth — never commit this.
+helpdesk-graph.key
+
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+dist/
+.DS_Store
