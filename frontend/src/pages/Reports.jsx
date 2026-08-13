@@ -127,16 +127,16 @@ function polarToCartesian(cx, cy, r, angleDeg) {
 }
 
 function donutSlicePath(cx, cy, rOuter, rInner, startAngle, endAngle) {
-  const so = polarToCartesian(cx, cy, rOuter, endAngle);
-  const eo = polarToCartesian(cx, cy, rOuter, startAngle);
-  const si = polarToCartesian(cx, cy, rInner, startAngle);
-  const ei = polarToCartesian(cx, cy, rInner, endAngle);
+  const outerStart = polarToCartesian(cx, cy, rOuter, startAngle);
+  const outerEnd = polarToCartesian(cx, cy, rOuter, endAngle);
+  const innerStart = polarToCartesian(cx, cy, rInner, startAngle);
+  const innerEnd = polarToCartesian(cx, cy, rInner, endAngle);
   const largeArc = endAngle - startAngle > 180 ? 1 : 0;
   return [
-    `M ${so.x} ${so.y}`,
-    `A ${rOuter} ${rOuter} 0 ${largeArc} 0 ${eo.x} ${eo.y}`,
-    `L ${ei.x} ${ei.y}`,
-    `A ${rInner} ${rInner} 0 ${largeArc} 1 ${si.x} ${si.y}`,
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
     'Z',
   ].join(' ');
 }
@@ -182,9 +182,8 @@ function DonutChart({ series }) {
           <path
             key={s.key}
             d={donutSlicePath(cx, cy, rOuter, rInner, s.start, s.end)}
-            fill={s.colorVar}
             opacity={activeKey && activeKey !== s.key ? 0.45 : 1}
-            style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+            style={{ fill: s.colorVar, cursor: 'pointer', transition: 'opacity 0.15s' }}
             tabIndex={0}
             role="button"
             aria-label={`${s.label}: ${s.count} tickets, ${Math.round(s.pct)} percent`}
