@@ -237,7 +237,6 @@ export default function Reports() {
   const navigate = useNavigate();
 
   const [interval, setInterval_] = useState('month');
-  const [groupBy, setGroupBy] = useState('department');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -246,7 +245,7 @@ export default function Reports() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getTicketReport({ interval, group_by: groupBy })
+    getTicketReport({ interval, group_by: 'tech' })
       .then((data) => {
         if (!cancelled) setRows(data.rows || []);
       })
@@ -259,13 +258,10 @@ export default function Reports() {
     return () => {
       cancelled = true;
     };
-  }, [interval, groupBy]);
+  }, [interval]);
 
   const { columns, table, grandTotal, maxRowTotal, totalsByColumn } = useMemo(() => pivot(rows), [rows]);
-  const donutSeries = useMemo(
-    () => (groupBy === 'tech' ? buildDonutSeries(columns, totalsByColumn) : []),
-    [groupBy, columns, totalsByColumn]
-  );
+  const donutSeries = useMemo(() => buildDonutSeries(columns, totalsByColumn), [columns, totalsByColumn]);
 
   async function handleLogout() {
     await apiLogout();
@@ -303,15 +299,6 @@ export default function Reports() {
               <option value="week">By Week</option>
               <option value="month">By Month</option>
               <option value="year">By Year</option>
-            </select>
-            <select
-              value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value)}
-              style={styles.filterSelect}
-              aria-label="Breakdown"
-            >
-              <option value="department">Whole Department</option>
-              <option value="tech">By Tech</option>
             </select>
           </div>
           <div style={styles.filterRight}>
