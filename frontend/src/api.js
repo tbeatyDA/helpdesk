@@ -142,7 +142,7 @@ export function getDepartments() {
   return apiFetch('/admin/departments');
 }
 
-/** Create a department. @param {Object} data - { name, slug, visible_columns } */
+/** Create a department. @param {Object} data - { name, slug, visible_columns, mailbox_email } */
 export function createDepartment(data) {
   return apiFetch('/admin/departments', {
     method: 'POST',
@@ -150,7 +150,7 @@ export function createDepartment(data) {
   });
 }
 
-/** Update a department. @param {Object} data - { name?, slug?, visible_columns? } */
+/** Update a department. @param {Object} data - { name?, slug?, visible_columns?, mailbox_email? } */
 export function updateDepartment(id, data) {
   return apiFetch(`/admin/departments/${id}`, {
     method: 'PATCH',

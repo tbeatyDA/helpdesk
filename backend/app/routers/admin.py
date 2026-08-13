@@ -47,6 +47,7 @@ def list_departments(
             name=d.name,
             slug=d.slug,
             visible_columns=d.visible_columns,
+            mailbox_email=d.mailbox_email,
             member_count=member_counts.get(d.id, 0),
             ticket_count=ticket_counts.get(d.id, 0),
         )
@@ -62,13 +63,18 @@ def create_department(
 ):
     if db.query(Department).filter(Department.slug == body.slug).first():
         raise HTTPException(status_code=409, detail=f"Slug '{body.slug}' is already in use")
-    dept = Department(name=body.name, slug=body.slug, visible_columns=body.visible_columns)
+    if body.mailbox_email and db.query(Department).filter(Department.mailbox_email == body.mailbox_email).first():
+        raise HTTPException(status_code=409, detail=f"Mailbox '{body.mailbox_email}' is already assigned to another department")
+    dept = Department(
+        name=body.name, slug=body.slug, visible_columns=body.visible_columns,
+        mailbox_email=body.mailbox_email,
+    )
     db.add(dept)
     db.commit()
     db.refresh(dept)
     return DepartmentAdminOut(
         id=dept.id, name=dept.name, slug=dept.slug, visible_columns=dept.visible_columns,
-        member_count=0, ticket_count=0,
+        mailbox_email=dept.mailbox_email, member_count=0, ticket_count=0,
     )
 
 
@@ -91,6 +97,15 @@ def update_department(
         dept.name = body.name
     if body.visible_columns is not None:
         dept.visible_columns = body.visible_columns
+    # mailbox_email uses model_fields_set (not "is not None") so an explicit
+    # empty string can clear it — None alone can't distinguish "field omitted"
+    # from "field cleared" once the validator normalizes "" to None.
+    if "mailbox_email" in body.model_fields_set:
+        if body.mailbox_email and db.query(Department).filter(
+            Department.mailbox_email == body.mailbox_email, Department.id != department_id
+        ).first():
+            raise HTTPException(status_code=409, detail=f"Mailbox '{body.mailbox_email}' is already assigned to another department")
+        dept.mailbox_email = body.mailbox_email
 
     db.commit()
     db.refresh(dept)
@@ -99,7 +114,7 @@ def update_department(
     ticket_count = db.query(func.count(Ticket.id)).filter_by(department_id=dept.id).scalar()
     return DepartmentAdminOut(
         id=dept.id, name=dept.name, slug=dept.slug, visible_columns=dept.visible_columns,
-        member_count=member_count, ticket_count=ticket_count,
+        mailbox_email=dept.mailbox_email, member_count=member_count, ticket_count=ticket_count,
     )
 
 

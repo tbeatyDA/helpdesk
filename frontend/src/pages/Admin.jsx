@@ -48,7 +48,7 @@ export default function Admin() {
 // ---- Departments -----------------------------------------------------------
 
 function emptyDeptForm() {
-  return { name: '', slug: '', columns: new Set(COLUMNS.map((c) => c.key)) };
+  return { name: '', slug: '', mailbox: '', columns: new Set(COLUMNS.map((c) => c.key)) };
 }
 
 function DepartmentsPanel() {
@@ -79,6 +79,7 @@ function DepartmentsPanel() {
     setForm({
       name: dept.name,
       slug: dept.slug,
+      mailbox: dept.mailbox_email || '',
       columns: new Set(dept.visible_columns || COLUMNS.map((c) => c.key)),
     });
     setEditingId(dept.id);
@@ -103,12 +104,13 @@ function DepartmentsPanel() {
     // (null) rather than an explicit list of everything, matching what a
     // brand-new department already means today.
     const visible_columns = form.columns.size === COLUMNS.length ? null : [...form.columns];
+    const mailbox_email = form.mailbox.trim();
     try {
       if (editingId === 'new') {
-        const created = await createDepartment({ name: form.name, slug: form.slug, visible_columns });
+        const created = await createDepartment({ name: form.name, slug: form.slug, visible_columns, mailbox_email });
         setDepartments((prev) => [...prev, created]);
       } else {
-        const updated = await updateDepartment(editingId, { name: form.name, slug: form.slug, visible_columns });
+        const updated = await updateDepartment(editingId, { name: form.name, slug: form.slug, visible_columns, mailbox_email });
         setDepartments((prev) => prev.map((d) => (d.id === editingId ? updated : d)));
       }
       setEditingId(null);
@@ -162,7 +164,24 @@ function DepartmentsPanel() {
                 placeholder="e.g. hr"
               />
             </label>
+            <label style={styles.formLabel}>
+              Mailbox email
+              <input
+                type="email"
+                value={form.mailbox}
+                onChange={(e) => setForm((f) => ({ ...f, mailbox: e.target.value }))}
+                placeholder="e.g. hr@dayair.org (leave blank for no email intake)"
+              />
+            </label>
           </div>
+          {form.mailbox.trim() && (
+            <p style={styles.helpText}>
+              This mailbox must already exist in Microsoft 365 and be added to the{' '}
+              <code>helpdesk-app-scope</code> access group in Exchange Online before mail sent
+              to it will create tickets here — that step can't be done from this page. Allow up
+              to 30 minutes after adding it for the change to take effect.
+            </p>
+          )}
 
           <p className="section-label" style={{ marginTop: '0.75rem' }}>Visible ticket columns</p>
           <div style={styles.checkGrid}>
@@ -203,6 +222,7 @@ function DepartmentsPanel() {
                 <tr>
                   <th>Name</th>
                   <th>Slug</th>
+                  <th>Mailbox</th>
                   <th>Columns</th>
                   <th style={{ textAlign: 'right' }}>Members</th>
                   <th style={{ textAlign: 'right' }}>Tickets</th>
@@ -214,6 +234,9 @@ function DepartmentsPanel() {
                   <tr key={d.id} style={{ cursor: 'default' }}>
                     <td>{d.name}</td>
                     <td style={{ color: 'var(--muted)' }}>{d.slug}</td>
+                    <td style={{ color: d.mailbox_email ? 'var(--body)' : 'var(--muted)' }}>
+                      {d.mailbox_email || 'None'}
+                    </td>
                     <td style={{ color: 'var(--muted)' }}>
                       {d.visible_columns ? `${d.visible_columns.length} of ${COLUMNS.length}` : 'All'}
                     </td>
@@ -451,6 +474,16 @@ const styles = {
     color: 'var(--muted)',
     flex: 1,
     minWidth: 200,
+  },
+  helpText: {
+    fontSize: 12,
+    color: 'var(--muted)',
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    padding: '0.5rem 0.75rem',
+    marginTop: '0.5rem',
+    lineHeight: 1.5,
   },
   checkGrid: {
     display: 'grid',

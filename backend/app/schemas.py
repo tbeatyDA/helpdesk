@@ -17,6 +17,18 @@ class UserOut(BaseModel):
     is_active: bool
 
 
+def _validate_mailbox_email(v: Optional[str]) -> Optional[str]:
+    """Empty string means "clear it" (handled by callers via model_fields_set,
+    since None alone can't distinguish "not provided" from "clear it" in a
+    PATCH); a real value must look like an email address."""
+    if v is None or v == "":
+        return None
+    v = v.strip().lower()
+    if "@" not in v or v.startswith("@") or v.endswith("@") or " " in v:
+        raise ValueError("mailbox_email must be a valid email address")
+    return v
+
+
 class DepartmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,12 +36,14 @@ class DepartmentOut(BaseModel):
     name: str
     slug: str
     visible_columns: Optional[list[str]]
+    mailbox_email: Optional[str]
 
 
 class DepartmentCreate(BaseModel):
     name: str
     slug: str
     visible_columns: Optional[list[str]] = None
+    mailbox_email: Optional[str] = None
 
     @field_validator("slug")
     @classmethod
@@ -39,11 +53,22 @@ class DepartmentCreate(BaseModel):
             raise ValueError("slug must be lowercase letters, numbers, and hyphens only")
         return v
 
+    @field_validator("mailbox_email")
+    @classmethod
+    def mailbox_email_valid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_mailbox_email(v)
+
 
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     slug: Optional[str] = None
     visible_columns: Optional[list[str]] = None
+    mailbox_email: Optional[str] = None
+
+    @field_validator("mailbox_email")
+    @classmethod
+    def mailbox_email_valid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_mailbox_email(v)
 
 
 class DepartmentMemberOut(BaseModel):
