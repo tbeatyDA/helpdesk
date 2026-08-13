@@ -41,6 +41,33 @@ def list_users(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_department_filter(db: Session, user: User, department_id: Optional[int]):
+    """SQLAlchemy filter clause for Ticket.department_id, or None for "no filter".
+
+    Admins with no department_id see everything (unchanged default). A non-admin
+    with no department_id sees all of THEIR departments' tickets — for today's
+    one-department world that's every ticket, same as before this existed. Shared
+    by every endpoint that lists or counts tickets, so they can't drift apart.
+    """
+    if department_id is not None:
+        if user.role != "admin":
+            is_member = (
+                db.query(DepartmentMember)
+                .filter_by(user_id=user.id, department_id=department_id)
+                .first()
+            )
+            if not is_member:
+                raise HTTPException(status_code=403, detail="Not a member of that department")
+        return Ticket.department_id == department_id
+    elif user.role != "admin":
+        member_dept_ids = [
+            m.department_id
+            for m in db.query(DepartmentMember).filter_by(user_id=user.id).all()
+        ]
+        return Ticket.department_id.in_(member_dept_ids)
+    return None
+
+
 @router.get("/", response_model=list[TicketListItem])
 def list_tickets(
     status: Optional[str] = None,
@@ -54,25 +81,9 @@ def list_tickets(
 ):
     query = db.query(Ticket).options(joinedload(Ticket.assigned_to))
 
-    # Admins with no department_id see everything (unchanged default). A non-admin
-    # with no department_id sees all of THEIR departments' tickets — for today's
-    # one-department world that's every ticket, same as before this existed.
-    if department_id is not None:
-        if user.role != "admin":
-            is_member = (
-                db.query(DepartmentMember)
-                .filter_by(user_id=user.id, department_id=department_id)
-                .first()
-            )
-            if not is_member:
-                raise HTTPException(status_code=403, detail="Not a member of that department")
-        query = query.filter(Ticket.department_id == department_id)
-    elif user.role != "admin":
-        member_dept_ids = [
-            m.department_id
-            for m in db.query(DepartmentMember).filter_by(user_id=user.id).all()
-        ]
-        query = query.filter(Ticket.department_id.in_(member_dept_ids))
+    dept_filter = _resolve_department_filter(db, user, department_id)
+    if dept_filter is not None:
+        query = query.filter(dept_filter)
 
     if status:
         query = query.filter(Ticket.status == status)
@@ -103,14 +114,15 @@ def list_tickets(
 
 @router.get("/stats/summary")
 def stats_summary(
+    department_id: Optional[int] = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    rows = (
-        db.query(Ticket.status, func.count(Ticket.id))
-        .group_by(Ticket.status)
-        .all()
-    )
+    query = db.query(Ticket.status, func.count(Ticket.id))
+    dept_filter = _resolve_department_filter(db, user, department_id)
+    if dept_filter is not None:
+        query = query.filter(dept_filter)
+    rows = query.group_by(Ticket.status).all()
     counts: dict[str, int] = {
         "total": 0,
         "open": 0,

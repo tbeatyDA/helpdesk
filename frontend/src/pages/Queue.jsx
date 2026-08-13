@@ -317,6 +317,12 @@ export default function Queue() {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
 
+  const isAdmin = user?.role === 'admin';
+  const memberships = user?.departments || [];
+  // A picker only matters once someone belongs to (or, as admin, can see across)
+  // more than one department — dormant today, since there's exactly one.
+  const showDeptPicker = isAdmin || memberships.length > 1;
+
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -332,6 +338,16 @@ export default function Queue() {
   const [priority, setPriority] = useState('all');
   const [searchRaw, setSearchRaw] = useState('');
   const [q, setQ] = useState(''); // debounced value
+  // Admins default to "All Departments" (omit the filter — unchanged today's
+  // behavior); everyone else defaults to their first (today, only) membership.
+  const [departmentId, setDepartmentId] = useState(() => (isAdmin ? null : memberships[0]?.id ?? null));
+
+  const activeDept = departmentId != null ? memberships.find((d) => d.id === departmentId) : null;
+  // No department selected (or its visible_columns is null) => show every column,
+  // exactly matching today's look for the one real department.
+  const displayColumns = activeDept?.visible_columns
+    ? COLUMNS.filter((c) => activeDept.visible_columns.includes(c.key))
+    : COLUMNS;
 
   // Sort
   const [sortCol, setSortCol] = useState('received');
@@ -361,8 +377,8 @@ export default function Queue() {
       setError('');
       try {
         const [ticketData, statsData] = await Promise.all([
-          getTickets({ status, priority, q }),
-          getStats(),
+          getTickets({ status, priority, q, department_id: departmentId }),
+          getStats(departmentId),
         ]);
         const ticketList = Array.isArray(ticketData) ? ticketData : (ticketData.items ?? []);
         setTickets(ticketList);
@@ -396,7 +412,7 @@ export default function Queue() {
         }
       }
     },
-    [status, priority, q]
+    [status, priority, q, departmentId]
   );
 
   // ---- Selection ---------------------------------------------------------
@@ -558,6 +574,19 @@ export default function Queue() {
         {/* Filter bar */}
         <div style={styles.filterBar}>
           <div style={styles.filterLeft}>
+            {showDeptPicker && (
+              <select
+                value={departmentId ?? ''}
+                onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : null)}
+                style={styles.filterSelect}
+                aria-label="Filter by department"
+              >
+                {isAdmin && <option value="">All Departments</option>}
+                {memberships.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            )}
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
@@ -652,7 +681,7 @@ export default function Queue() {
                         aria-label="Select all tickets"
                       />
                     </th>
-                    {COLUMNS.map(({ key, label }) => (
+                    {displayColumns.map(({ key, label }) => (
                       <th
                         key={key}
                         onClick={() => handleSortClick(key)}
@@ -687,7 +716,7 @@ export default function Queue() {
                           aria-label={`Select ticket ${t.number}`}
                         />
                       </td>
-                      {COLUMNS.map((col) => (
+                      {displayColumns.map((col) => (
                         <React.Fragment key={col.key}>
                           {col.renderCell(t, { users, assetMap, handleInlineUpdate })}
                         </React.Fragment>

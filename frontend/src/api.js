@@ -39,7 +39,7 @@ export function getMe() {
 
 /**
  * Fetch ticket list.
- * @param {Object} params - { status, priority, q }
+ * @param {Object} params - { status, priority, q, department_id }
  */
 export function getTickets(params = {}) {
   const qs = new URLSearchParams();
@@ -50,6 +50,7 @@ export function getTickets(params = {}) {
   }
   if (params.priority && params.priority !== 'all') qs.set('priority', params.priority);
   if (params.q) qs.set('q', params.q);
+  if (params.department_id != null) qs.set('department_id', params.department_id);
   const query = qs.toString();
   return apiFetch(`/tickets/${query ? `?${query}` : ''}`);
 }
@@ -83,9 +84,10 @@ export function replyToTicket(id, body) {
   });
 }
 
-/** Fetch summary stats (counts per status). */
-export function getStats() {
-  return apiFetch('/tickets/stats/summary');
+/** Fetch summary stats (counts per status), optionally scoped to a department. */
+export function getStats(departmentId) {
+  const qs = departmentId != null ? `?department_id=${departmentId}` : '';
+  return apiFetch(`/tickets/stats/summary${qs}`);
 }
 
 /**
